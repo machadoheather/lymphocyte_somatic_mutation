@@ -14,7 +14,7 @@
 * [Mutational signature plotting and statistical tests](03_mutational_signature_analysis)
 * [SBS9 and SHM mutations](04_SBS9_SHM_comparison)
 * [GAM regression of genomic features and mutations](05_SBS9_genomic_feature_GAM)
-* [RAG and CSR motifs near SV breakpoints ](06_RAG_CSR_motifs)
+* [SV analyses](06_SV_analyses)
 
  ## [Variant filtering](01_variant_filtering)
  * [Filtering SNVs](01_variant_filtering/snv_results)
