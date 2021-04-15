@@ -12,18 +12,25 @@
 ## Analyses
 * [Variant filtering](#general-info)
 
- ## [Variant filtering](#https://github.com/user/lymphocyte_somatic_mutation#01_variant_filtering)
+ ## [Variant filtering](01_variant_filtering)
  * [Filtering SNVs]
  * [Filtering indels]
  * [Per-individual results]
  * [Filtering SV]
  
+ ## [Mutation burden](02_mutation_burden_analysis)
+ * [Depth-based burden correction](02_mutation_burden_analysis/analysis_HSC_mutburden_correction.html)
+ * [Combine datasets](02_mutation_burden_analysis/combining_donors_March2021.R)
+ * SNV burden mixed model
+ * Indel burden mixed model
 
- ## Setup
- To run this project, install it locally using npm:
+analyses_indelmixedmodel_March2021.html
+
+ ## Test code
+ Run code
 
  ```
- $ cd ../lorem
- $ npm install
- $ npm start
+ cd ../lorem
+ npm install
+ npm start
  ```
