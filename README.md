@@ -4,7 +4,7 @@
  The page provides code for analyses conducted in Machado et al. 2021.
  "Genome-wide mutagenesis during immunological diversification in normal"
  
- Author: Heather E. Machado \\
+ Author: Heather E. Machado \
  Contact: heather.machado@sanger.ac.uk
  
 ## Table of contents
