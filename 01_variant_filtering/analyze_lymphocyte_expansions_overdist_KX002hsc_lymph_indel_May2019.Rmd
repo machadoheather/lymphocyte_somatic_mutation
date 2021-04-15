@@ -1,0 +1,590 @@
+---
+title: "KX002 indel May 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache=TRUE, fig.path="./graphics/plot",autodep=TRUE,fig.width=5, fig.height=4)
+knitr::opts_knit$set(root.dir = '/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/KX002hsc_lymph')
+library(ggplot2)
+library(cowplot)
+library(caTools)
+library(reshape2)
+library(dplyr)
+library(data.table)
+
+```
+
+```{r, fig.width=2.5, fig.height=2}
+## Analyzing tonsilPS T, and B sample variants and shearwater stats for filtering
+groupname = "KX002"
+
+## Original VAFs (mutation ID as rowname)
+HQdp1 = read.table(paste(groupname,"_indel_totalDP.txt", sep=""), stringsAsFactors = F, header=T, check.names=F)
+HQalt1 = read.table(paste(groupname,"_indel_alternateDP.txt", sep=""), stringsAsFactors = F, header=T, check.names=F)
+
+sample_names = colnames(HQdp1)
+#sum(sample_names %in% unique(shearw$colony) )  ## all represented in shearwater: 40
+Nsamples = length(sample_names)  ##  434
+
+HQdpNA = HQdp1
+HQdpNA[HQdp1==0] = NA
+HQfreq1 = HQalt1/HQdpNA
+
+meanfreq = apply(HQfreq1, MARGIN=1, FUN=mean, na.rm=TRUE)
+HQdp = HQdp1[meanfreq<0.4, ]
+HQalt = HQalt1[meanfreq<0.4, ]
+HQfreq = HQfreq1[meanfreq<0.4, ]
+```
+
+
+```{r}
+## Removing samples:
+goodsamples = sample_names[which(sample_names != "T1_A3")]
+dpkeep = goodsamples
+```
+
+
+```{r}
+##### Using the overdispersion filter
+## Identify somatic variants
+######### The dispersion filter (from Tim Coorens)
+#library(VGAM)
+library(diptest)
+library(quantmod)
+
+bb_df = na.omit(read.table(paste(groupname,"_rho.txt", sep=""), stringsAsFactors = FALSE, header=TRUE))
+rho_est = as.numeric(bb_df$rho)
+pvalue = as.numeric(bb_df$pvalue)
+
+dip.test(log(rho_est))$p.value # 0
+dens1 = density(-log(rho_est))
+dens1df = data.frame(xval = as.numeric(dens1$x), yval=as.numeric(dens1$y))
+
+peak1 = findPeaks(dens1$y)
+val1 = findValleys(dens1$y)
+{plot(dens1)
+abline(v=dens1$x[val1], col="black")
+}
+my_logval = dens1$x[val1][1]
+{plot(dens1)
+abline(v=dens1$x[val1], col="black")
+abline(v=my_logval, col="red")}
+my_valley2 = my_logval  #  2.233188
+#my_valley2 = 4  #  1.741603
+
+
+{pdf(paste("figures/", groupname,".overdist_cutoff_indel.pdf", sep="") )
+plot(dens1)
+abline(v=dens1$x[val1], col="black")
+abline(v=my_valley2, col="red")}
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+
+####### Setting threshold
+log_rho_threshold = -my_valley2
+pvalue_threshold = 0.1
+{plot(log(rho_est),pvalue, col=rgb(0,0,0,0.5))
+  abline(h=pvalue_threshold, col="blue")
+  abline(v=log_rho_threshold, col="red")}
+
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+###### Checking the cutoffs
+flt_rho_toss = bb_df$ID[log(rho_est)<=log_rho_threshold|pvalue>=pvalue_threshold]
+flt_rho_keep = bb_df$ID[log(rho_est)>log_rho_threshold & pvalue<pvalue_threshold]  ## 18009
+length(flt_rho_keep)/(length(flt_rho_keep)+length(flt_rho_toss)) # Keep 0.3072369
+
+## measure mean VAF of sites with 2 or more alt reads
+# HQalt_keep = subset(HQalt, rownames(HQalt) %in% flt_rho_keep)
+# HQfreq_keep = subset(HQfreq, rownames(HQfreq) %in% flt_rho_keep)
+# HQalt_toss = subset(HQalt, rownames(HQalt) %in% flt_rho_toss)
+# HQfreq_toss = subset(HQfreq, rownames(HQfreq) %in% flt_rho_toss)
+
+HQalt_keep = subset(HQalt, (rownames(HQalt) %in% flt_rho_keep) ) [,dpkeep]
+HQfreq_keep = subset(HQfreq, (rownames(HQfreq) %in% flt_rho_keep) )[,dpkeep]
+Nsamples = length(dpkeep)  # 236 samples
+sample_names = dpkeep
+
+# Distribution post-filtering should be nicely centered around 0.5 (removed sample tx)
+# for (i in 1:ncol(HQfreq_keep)){
+#     hist(HQfreq_keep[,i][HQfreq_keep[,i]>0 & HQalt_keep[,i]>1], main=length(na.omit(HQfreq_keep[,i][HQfreq_keep[,i]>0 & HQalt_keep[,i]>1])), breaks=100, xlab=sample_names[i] )
+# }
+```
+
+
+# More QC post overdist filter
+```{r, message=FALSE, warning=FALSE}
+tmp = data.frame(HQfreq_keep, HQalt_keep)
+
+meanVAF_alt2_keep = apply(tmp, MARGIN=1, FUN=function(X) mean( X[1:Nsamples][X[(Nsamples+1):(2*Nsamples)]>=2] ) )
+meanVAF_alt2_keep[is.nan(meanVAF_alt2_keep)] = 0
+Nsamples_alt2_keep = apply(tmp, MARGIN=1, FUN=function(X) length( X[1:Nsamples][ X[(Nsamples+1):(2*Nsamples)]>=2 ] ) )
+
+meanVAF_alt2_freq20_keep = apply(tmp, MARGIN=1, FUN=function(X) mean( X[1:Nsamples][    X[1:Nsamples]>0.2 & X[(Nsamples+1):(2*Nsamples)]>=2 ] ) )
+meanVAF_alt2_freq20_keep[is.nan(meanVAF_alt2_freq20_keep)] = 0
+Nsamples_alt2_freq20_keep = apply(tmp, MARGIN=1, FUN=function(X) length( X[1:Nsamples][    X[1:Nsamples]>0.2 & X[(Nsamples+1):(2*Nsamples)]>=2 ] ) )
+                          
+# for (i in 1:length(HQalt_keep[,1])){
+#    meanVAF_alt2_keep[i] = mean(as.numeric(HQfreq_keep[i,2:(length(sample_names)+1)][which(HQalt_keep[i,2:(length(sample_names)+1)]>=2) & ]))
+# }
+# meanVAF_alt2_toss = vector()
+# for (i in 1:length(HQalt_toss[,1])){
+#   meanVAF_alt2_toss[i] = mean(as.numeric(HQfreq_toss[i,2:(length(sample_names)+1)][which(HQalt_toss[i,2:(length(sample_names)+1)]>=2)]))
+# }
+# HQfreq_toss$meanVAF_alt2 = meanVAF_alt2_toss
+# HQfreq_toss$Nsamples_alt2 = as.numeric(apply(HQalt_toss[,2:(length(sample_names)+1)], MARGIN=1, FUN=function(X) sum(X>=2) ))
+
+HQfreq_keep$meanVAF_alt2 = as.numeric(meanVAF_alt2_keep)
+HQfreq_keep$Nsamples_alt2 = Nsamples_alt2_keep
+
+HQfreq_keep$meanVAF_alt2_freq20 = as.numeric(meanVAF_alt2_freq20_keep)
+HQfreq_keep$Nsamples_alt2_freq20 = Nsamples_alt2_freq20_keep
+
+
+{hist( as.numeric(HQfreq_keep$meanVAF_alt2[HQfreq_keep$Nsamples_alt2>1]), breaks=100, freq=F, main="Mean VAF (alt2), keep", xlim=c(0,1))
+hist( as.numeric(HQfreq_keep$meanVAF_alt2[HQfreq_keep$Nsamples_alt2==1]), breaks=100, freq=F, col=rgb(1,0,0,0.5), add=TRUE)
+legend("topright", fill=c("white", rgb(1,0,0,0.5)), legend=c("Shared","Private"))}
+
+{hist( as.numeric(HQfreq_keep$meanVAF_alt2_freq20[HQfreq_keep$Nsamples_alt2_freq20>1]), breaks=100, freq=F, main="Mean VAF (alt2 freq20), keep", xlim=c(0,1))
+hist( as.numeric(HQfreq_keep$meanVAF_alt2_freq20[HQfreq_keep$Nsamples_alt2_freq20==1]), breaks=100, freq=F, col=rgb(1,0,0,0.5), add=TRUE)
+legend("topright", fill=c("white", rgb(1,0,0,0.5)), legend=c("Shared","Private"))}
+
+```
+
+
+```{r}
+### Shared mutations among colonies 
+t1 = table(HQfreq_keep$Nsamples_alt2_freq20)
+t0 = data.frame(Ncolonies=as.numeric(names(t1)[names(t1)>0]), Nsnvs = t1[names(t1)>0])
+ggplot(t0)+
+  geom_point(aes(as.numeric(Ncolonies), Nsnvs.Freq))+
+  scale_y_continuous(trans='log10') + 
+  ylab("# SNVs (log)") + 
+  xlab("# colonies sharing SNV") 
+ggsave(file=paste("figures/colonysharing_", groupname,".pdf", sep=""), width=6,height=4)
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Filtering out SNVs identified based on low depth or alt depth
+## Assigning NAs to anything below cutoff
+HQfreqsomNA = HQfreq_keep[,1:Nsamples]
+HQfreqsomNA[ (tmp[, 1:Nsamples]<=0.2 | tmp[, (Nsamples+1):(2*Nsamples)]<2) ] = NA  ## Anytime the alt is <2 or freq <0.2
+##HQfreqsomNA[ (tmp[, (Nsamples+1):(2*Nsamples)]<2) ] = NA 
+#HQfreqsomNA2 = merge( unique(shearw[ , c("ID", "chr", "pos", "ref", "mut")]), data.frame(rownames(HQfreqsomNA), HQfreqsomNA), by=1)
+
+
+r1 = do.call(rbind, lapply(rownames(HQfreqsomNA), FUN=function(X) unlist(strsplit(X, ":")) ) )
+r2 = do.call(rbind, lapply(r1[,2], FUN=function(X) unlist(strsplit(X, "_")) ) )
+r3 = do.call(rbind, lapply(r2[,2], FUN=function(X) unlist(strsplit(X, "/")) ) )
+HQfreqsomNA2 = data.frame(ID=rownames(HQfreqsomNA), chr=r1[,1], pos=r2[,1], ref=r3[,1], mut=r3[,2], HQfreqsomNA)
+#HQfreqsomNA2 = merge( unique(shearw[ , c("ID", "chr", "pos", "ref", "mut")]), data.frame(rownames(HQfreqsomNA), HQfreqsomNA), by=1)
+
+## separating by sample  ###### This was preventing the Knit to run, so I've commented it
+# somsample_list = list()
+# for (focal.sample in 1:Nsamples){
+#   ind=focal.sample ## for samples 6-10
+#   focalfreq = data.frame(ID=HQfreq_keep$ID, HQ.alt.freq=HQfreqsomNA[,focal.sample])
+#   somsample_list[[focal.sample]] = na.omit(focalfreq)
+# }
+# names(somsample_list) = colnames(HQfreqsomNA )
+
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+####### Reading in cell type metadata
+metadata = read.csv(paste("ARGhscPB_ARGlymph380Treg_sampleinfo.csv", sep=""), stringsAsFactors = FALSE)
+m1 = merge(metadata, sample_names, by=1, all.y=TRUE)
+table(m1$CellType)
+# B Memory    B Naive CD4 Memory  CD4 Naive CD8 Memory  CD8 Naive        HSC       Treg 
+#        22         46         34        128          3          6        173         11 
+        
+### Number of mutations by colony type
+## Adding the HSC cell type designation
+#m1$Cell.type[is.na(m1$Cell.type)] = "HSC"
+m1$Cell.type2 = m1$CellType
+m1$Cell.type2[m1$Cell.type2=="CD8 Memory"] = "T Memory"
+m1$Cell.type2[m1$Cell.type2=="CD4 Memory"] = "T Memory"
+m1$Cell.type2[m1$Cell.type2=="CD8 Naive"] = "T Naive"
+m1$Cell.type2[m1$Cell.type2=="CD4 Naive"] = "T Naive"
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+####### Removing colonies that look polyclonal (only removed 1, so now 433 colonies)
+somsample_list2 = list()
+
+for (i in 1:length(goodsamples)){
+#for (i in 1:Nsamples){
+  #ind = 1
+  ind=i+5 ## for samples 6-10
+  focalfreq = data.frame(HQfreqsomNA2[,1:5], HQ.alt.freq=HQfreqsomNA2[,ind])
+  somsample_list2[[i]] = na.omit(focalfreq)
+}
+names(somsample_list2) = goodsamples
+```
+
+
+```{r}
+### Number of mutations per colony (good dataset)
+mut_per_colony = data.frame(colony=names(somsample_list2), Nmut = unlist(lapply(somsample_list2, FUN=nrow)))
+hist(mut_per_colony$Nmut, breaks=50)
+
+```
+
+
+```{r}
+### Number of mutations by colony type (good dataset)
+m2 = merge(m1, mut_per_colony, by=1)
+m3 = m2[!is.na(m2$meandp),]
+m3$Nmut = m3$Nmut.y
+
+## Boxplot of # mutations per colony type
+Nmut_med = round(tapply(m2$Nmut.y, INDEX=m2$Cell.type2 , FUN=median))
+ggplot(m2) +
+  geom_boxplot(aes(Cell.type2, Nmut.y)) + 
+  ylab("# Mutations") +
+  xlab("Cell type") +
+  #ylim(0,6300) +
+  annotate("text", x = 1:length(Nmut_med), y = rep(1,times=length(Nmut_med)), label = Nmut_med )
+ggsave(file=paste("figures/mutload_celltype_boxplot.", groupname,".pdf", sep=""), width=5,height=4)
+```
+
+
+```{r}
+## Number of mutations vs coverage
+#m3 = merge(data.frame(colony=names(meandp), meandp), m2, by=1)
+ggplot(m3) +
+  geom_point(aes(meandp,Nmut,fill=Cell.type2), pch=21) + 
+  #scale_fill_brewer(palette="Set1")
+  scale_fill_brewer(type="qual", palette=3) + 
+  #ylim(0,6500)+
+  ylab("# Mutations") +
+  xlab("Coverage per colony")+
+  ggtitle("ARG")
+ggsave(file=paste("figures/mutload_celltype_", groupname,".pdf", sep=""), width=6,height=4)
+
+```
+
+
+```{r}
+### Model to correct for coverage
+m4 = m3[m3$Cell.type2 == "B Naive" | m3$Cell.type2 == "T Naive" | m3$Cell.type2 == "HSC" ,  ]
+lm1 = lm(m4$Nmut~m4$meandp)
+summary(lm1) # p-value: 2.2e-16
+ggplot(m4, aes(x=meandp,y=Nmut)) +
+  geom_point(, pch=21) + 
+  #scale_fill_brewer(palette="Set1")
+  scale_fill_brewer(type="qual", palette=3) + 
+  ylim(0,2500) + 
+  stat_smooth(method="lm")
+  #abline(lm1)
+
+### Asymptotic model to correct for coverage
+m4sorted = sortedXyData(m4$meandp, m4$Nmut)
+model.as = NLSstAsymptotic(m4sorted)
+mymodel = function(x){
+  b0 = model.as[1]
+  b1 = model.as[2]
+  lrc = model.as[3]
+  b0 + b1*(1-exp(-exp(lrc) * x))  
+}
+
+myrange=1:round(max(m4$meandp))
+asp = data.frame(x=myrange, y=unlist(lapply(myrange, FUN=mymodel)))
+ggplot(m4) +
+  geom_point(aes(x=meandp,y=Nmut), data=m4, pch=21) + 
+  #scale_fill_brewer(palette="Set1")
+  scale_fill_brewer(type="qual", palette=3) + 
+  #ylim(0,2500) + 
+  #xlim(0,40) + 
+  #stat_smooth(method="lm")+
+  #abline(lm1)
+  ylab("# Mutations") +
+  xlab("Coverage per colony")+
+  geom_line(aes(x=x, y=y), data=asp)+
+  ggtitle("ARG")
+ggsave(file=paste("mutload_model_adjust_asy_", groupname,".pdf", sep=""), width=4.5,height=4)
+
+### Normalize all to a read depth of 20:
+new_nmut = function(rd, nmut){
+  nmut + ( mymodel(20) - mymodel(rd))
+}
+m3$Nmut_adj_as_indel = apply(m3, MARGIN=1, FUN=function(X)  new_nmut(rd=as.numeric(X[which(colnames(m3)=="meandp")]), nmut=as.numeric(X[which(colnames(m3)=="Nmut")]) ) )
+ggplot(m3) +
+  geom_point(aes(meandp,Nmut_adj_as_indel,fill=Cell.type2), pch=21) + 
+  scale_fill_brewer(type="qual", palette=3) + 
+  ylab("# Mutations") +
+  xlab("Coverage per colony")+
+  ggtitle("ARG")
+ggsave(file=paste("mutload_celltype_adjust_asy_", groupname,".pdf", sep=""), width=6,height=4)
+
+```
+
+
+```{r}
+### Running the model to corrected for coverage
+## Boxplot of # mutations per colony type
+m3$Cell.type2 = factor(m3$Cell.type2, levels=c("HSC","B Naive","B Memory","T Naive","T Memory","Treg") )
+Nmut_med = round(tapply(m3$Nmut_adj_as_indel, INDEX=m3$Cell.type2 , FUN=median))
+ggplot(m3) +
+  geom_boxplot(aes(Cell.type2, Nmut_adj_as_indel)) + 
+  ylab("# Mutations") +
+  xlab("Cell type") +
+  #ylim(0,6300) +
+  annotate("text", x = 1:length(Nmut_med), y = rep(1,times=length(Nmut_med)), label = Nmut_med )+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave(file=paste("figures/mutload_celltype_boxplot_adj_as_.", groupname,".pdf", sep=""), width=5,height=4)
+
+
+m3$Cell.type2[m3$Cell.type2=="Memory"] = "B Memory"
+m3$Cell.type2[m3$Cell.type2=="Naive"] = "B Naive"
+write.table(m3, file=paste("meandp_cellnumber_colony_", groupname, ".csv", sep=""), quote=FALSE, col.names=TRUE, sep=",")
+
+colorCodesLightDark=c("HSC"="#238b45", "B Naive"="#f768a1", "B Memory"="#dd1c77", "T Naive"="#41b6c4", "T Memory"="#253494","Treg"="grey")
+ggplot(m3, aes(Nmut_adj_as_indel,Nmut_adj_as, fill=Cell.type2) )+
+  geom_point(pch=21)+
+  scale_fill_manual("Cell type", values=colorCodesLightDark)+
+  ylab("# SNVs")+
+  xlab("# Indels")
+ggsave(file=paste("figures/mutload_celltype_scatter_SNVindel_adj_as_.", groupname,".pdf", sep=""), width=5,height=4)
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+##### Output file of genotypes for tree building.
+## 1 for present, 0 for absent, 3 for missing data
+#gens = HQfreqsomNA[ , colnames(HQfreqsomNA) %in% goodsamples]
+gens = HQfreqsomNA
+gens[is.na(gens)] = 0 
+gens[gens>0] = 1
+Nshared = apply(gens, MARGIN=1, FUN=sum)
+gens_shared2 = gens[Nshared>1, ] # 7966  329
+gens_shared3 = gens[Nshared>2, ] # 2328
+gens_shared4 = gens[Nshared>3, ] # 1081
+gens_non0 = gens[Nshared>=1, ]
+write.table(gens_non0, file=paste("genotypes_non0_",groupname,"_",ncol(gens),"samples.txt", sep=""), quote=F, col.names = T, row.names = T) #420803
+#write.table(gens_shared4, file="genotypes_shared4.txt", quote=F, col.names = T, row.names = T)
+# write.table(gens_shared3, file="genotypes_shared3.txt", quote=F, col.names = T, row.names = T)
+write.table(gens_shared2, file=paste("genotypes_shared_",groupname,"_",ncol(gens),"samples.txt", sep=""), quote=F, col.names = T, row.names = T) #9625
+
+# # ### For scite program (no rows and column names)
+# write.table(gens_shared2, file=paste("scite_genotypes_alt2freq20absent_", groupname, ".txt", sep=""), quote=F, col.names = F, row.names = F)
+# write.table(rownames(gens_shared2), file=paste("scite_mutations_alt2freq20absent_", groupname, ".txt", sep=""), quote=F, col.names = F, row.names = F)
+# write.table(colnames(gens_shared2), file=paste("scite_samples_alt2freq20absent_", groupname, ".txt", sep=""), quote=F, col.names = F, row.names = F)
+
+
+## filter and include missing 
+HQfreqsom3 = HQfreq_keep[ , which(colnames(HQfreq_keep) %in% goodsamples)]
+HQaltsom3 = HQalt_keep[ , which(colnames(HQalt_keep) %in% goodsamples)]
+tmp2 = data.frame(HQfreqsom3, HQaltsom3)
+Ngoodsamples = length(goodsamples)
+
+HQfreqsom3[ (tmp2[, 1:Ngoodsamples]<=0.2 & tmp2[, (Ngoodsamples+1):(2*Ngoodsamples)]>=1) ] = 3  ## "missing if less than 20% but 1 or more alt reads"
+HQfreqsom3[ (tmp2[, 1:Ngoodsamples]>0.2 & tmp2[, (Ngoodsamples+1):(2*Ngoodsamples)]>=2) ] = 1  ## Present if 2 or more alt and 20% or greater
+HQfreqsom3[ (tmp2[, 1:Ngoodsamples]>0.2 & tmp2[, (Ngoodsamples+1):(2*Ngoodsamples)]==1) ] = 3  ## Present if 2 or more
+HQfreqsom3[ tmp2[, (Ngoodsamples+1):(2*Ngoodsamples)]==0 ] = 0  ## Not present if no alt reads
+#         0         1         3 
+# 125209106    399907   2659347 
+sum1 = apply(HQfreqsom3, MARGIN=1, FUN=function(X) sum(X==1))
+sum2plus = apply(HQfreqsom3, MARGIN=1, FUN=function(X) sum(X==1)>=2 )
+HQfreqsom3b = HQfreqsom3[sum2plus, ]  # 9625  379
+write.table(HQfreqsom3b, file=paste("scite_genotypes_alt2freq20missing_", groupname, ".txt", sep=""), quote=F, col.names = F, row.names = F)
+write.table(rownames(HQfreqsom3b), file=paste("scite_mutations_alt2freq20missing_", groupname, ".txt", sep=""), quote=F, col.names = F, row.names = F)
+write.table(colnames(HQfreqsom3b), file=paste("scite_samples_alt2freq20missing_", groupname, ".txt", sep=""), quote=F, col.names = F, row.names = F)
+
+
+## Only keep sites that have at least one sample with and one sample without a given SNV.
+#HQalt2_ID_informative = HQalt2_ID[nsamples_persub < nsamples & nsamples_persub > 0, ] 
+# write.table(t(HQalt2_ID_informative[,2:ncol(HQalt2_ID_informative)]), file="hsc_old.test16.alt2.samples1.mutmatrix.txt", quote=F, col.names = F, row.names = F, sep="\t")
+# write.table(HQalt2_ID_informative[,1], file="hsc_old.test16.alt2.samples1.mutnames.txt", quote=F, col.names = F, row.names = F, sep="\t")  # might have to use quote=T
+
+## Only keep sites that have at two samples with and one sample without a given SNV.
+#HQalt2_ID_informative2 = HQalt2_ID[nsamples_persub < nsamples & nsamples_persub > 1, ]  # 59
+# write.table(t(HQalt2_ID_informative2[,2:ncol(HQalt2_ID_informative)]), file="hsc_old.test16.alt2.samples2.mutmatrix.txt", quote=F, col.names = F, row.names = F, sep="\t")
+# write.table(HQalt2_ID_informative2[,1], file="hsc_old.test16.alt2.samples2.mutnames.txt", quote=F, col.names = F, row.names = F, sep="\t")  # might have to use quote=T
+
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+##### Mutation matrix
+genomeFile = "/Users/hm8/sanger/genomes/human/GRCh37d5/genome.fa"
+library("GenomicRanges")
+library("Rsamtools")
+library("MASS")
+# mutcounts_matrix = matrix(ncol=length(somsample_list2), nrow=96)
+# mutcontext_list = list()
+# for (focal.sample in 1:length(somsample_list2)){
+#   subs_only = somsample_list2[[focal.sample]][,2:6]
+#   colnames(subs_only) = c("chr","pos","ref","mut","freq")
+#   subs_only = subs_only[(subs_only$ref %in% c("A","C","G","T")) & (subs_only$mut %in% c("A","C","G","T")) & subs_only$chr %in% c(1:22,"X","Y"),]
+#   subs_only$trinuc_ref = as.vector(scanFa(genomeFile, GRanges(subs_only$chr, IRanges(subs_only$pos-1, subs_only$pos+1))))
+#   
+#   # 2. Annotating the mutation from the pyrimidine base
+#   ntcomp = c(T="A",G="C",C="G",A="T")
+#   subs_only$sub = paste(subs_only$ref,subs_only$mut,sep=">")
+#   subs_only$trinuc_ref_py = subs_only$trinuc_ref
+#   for (j in 1:nrow(subs_only)) {
+#     if (subs_only$ref[j] %in% c("A","G")) { # Purine base
+#       subs_only$sub[j] = paste(ntcomp[subs_only$ref[j]],ntcomp[subs_only$mut[j]],sep=">")
+#       subs_only$trinuc_ref_py[j] = paste(ntcomp[rev(strsplit(subs_only$trinuc_ref[j],split="")[[1]])],collapse="")
+#     }
+#   }
+#   mutcontext_list[[focal.sample]] = subs_only
+#   
+#   # 3. Counting subs
+#   freqs = table(paste(subs_only$sub,paste(substr(subs_only$trinuc_ref_py,1,1),substr(subs_only$trinuc_ref_py,3,3),sep="-"),sep=","))
+#   sub_vec = c("C>A","C>G","C>T","T>A","T>C","T>G")
+#   ctx_vec = paste(rep(c("A","C","G","T"),each=4),rep(c("A","C","G","T"),times=4),sep="-")
+#   full_vec = paste(rep(sub_vec,each=16),rep(ctx_vec,times=6),sep=",")
+#   freqs_full = freqs[full_vec]; freqs_full[is.na(freqs_full)] = 0; names(freqs_full) = full_vec
+#   
+#   xstr = paste(substr(full_vec,5,5), substr(full_vec,1,1), substr(full_vec,7,7), sep="")
+#   
+#   #dev.new(width=10,height=4)
+#   colvec = rep(c("dodgerblue","black","red","grey70","olivedrab3","plum2"),each=16)
+#   y = freqs_full; maxy = max(y)
+#   mutcounts_matrix[,focal.sample] = y
+#   
+#   {pdf(file=paste("figures/",groupname, "_triplot_sample",sample_names[focal.sample],".pdf", sep=""), width=7,height=5)
+#   h=barplot(y, las=2, col=colvec, border=NA, ylim=c(0,maxy*1.5), space=1, cex.names=0.6, names.arg=xstr, ylab="# SNVs")
+#   mtext(side=4, text=sample_names[focal.sample])
+#   for (j in 1:length(sub_vec)) {
+#     xpos = h[c((j-1)*16+1,j*16)]
+#     rect(xpos[1]-0.5, maxy*1.2, xpos[2]+0.5, maxy*1.3, border=NA, col=colvec[j*16])
+#     text(x=mean(xpos), y=maxy*1.3, pos=3, label=sub_vec[j])
+#   } 
+#   dev.off()
+#   }
+# }
+# 
+# plot_mutspectrum = function(y, name){
+#   colvec = rep(c("dodgerblue","black","red","grey70","olivedrab3","plum2"),each=16)
+#   sub_vec = c("C>A","C>G","C>T","T>A","T>C","T>G")
+#   ctx_vec = paste(rep(c("A","C","G","T"),each=4),rep(c("A","C","G","T"),times=4),sep="-")
+#   full_vec = paste(rep(sub_vec,each=16),rep(ctx_vec,times=6),sep=",")
+#   freqs_full = freqs[full_vec]; freqs_full[is.na(freqs_full)] = 0; names(freqs_full) = full_vec
+#   xstr = paste(substr(full_vec,5,5), substr(full_vec,1,1), substr(full_vec,7,7), sep="")
+#   maxy = max(y)
+#   h=barplot(y, las=2, col=colvec, border=NA, ylim=c(0,maxy*1.5), space=1, cex.names=0.6, names.arg=xstr, ylab="# SNVs")
+#   mtext(side=4, text=name)
+#   for (j in 1:length(sub_vec)) {
+#     xpos = h[c((j-1)*16+1,j*16)]
+#     rect(xpos[1]-0.5, maxy*1.2, xpos[2]+0.5, maxy*1.3, border=NA, col=colvec[j*16])
+#     text(x=mean(xpos), y=maxy*1.3, pos=3, label=sub_vec[j])
+#   } 
+# }
+# 
+# names(mutcontext_list) = names(somsample_list2)
+# for (i in 1:length(somsample_list2)){
+#   somsample_list2[[i]]$sample = names(somsample_list2)[i]
+# }
+# somsample_df = data.frame(rbindlist(somsample_list2))
+# save(mutcounts_matrix, mutcontext_list, goodsamples, file=paste(groupname, "_mutcounts_matrix.Rdata", sep="") )
+save(somsample_list2, goodsamples, sample_names, file=paste(groupname, "_somsample_list2.Rdata", sep="") )
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+############ CAN RESTART FROM HERE (without reloading everything)
+######## Just use R objects below
+groupname = "ARGhscPB_ARGlymph380Treg_indel"
+load(file=paste(groupname, "_somsample_list2.Rdata", sep=""))
+#load(file=paste(groupname, "_mutcounts_matrix.Rdata", sep=""))
+m3 = read.csv(file=paste("meandp_cellnumber_colony_", groupname, ".csv", sep=""),header=T, stringsAsFactors = F)
+#m3$Cell.type2 = factor(m3$Cell.type2, levels=c("HSC","B Naive","B Memory","T Naive","T Memory" ) )
+#m3$Cell.type2 = factor(m3$Cell.type2, levels=c("B Naive","B Memory","T Naive") ) # if no HSC
+#################
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+## Plotting the mutations by group (HSC, T, B)
+celltypes = levels(m3$Cell.type2)
+mutcounts_matrix_celltypes = matrix(ncol=length(celltypes), nrow=96)
+for (i in 1:length(celltypes)){
+  mat1 = mutcounts_matrix[,which(names(somsample_list2) %in% m3$colony[m3$Cell.type2==celltypes[i]])]
+  if (is.integer(ncol(mat1))){
+    y = apply(mat1, MARGIN=1, FUN=sum)  
+  } else {
+    y = mat1
+  }
+  maxy = max(y)
+  {pdf(file=paste("figures/",groupname, "_triplot_sample_",celltypes[i],".pdf", sep=""), width=7,height=5)
+  h=barplot(y, las=2, col=colvec, border=NA, ylim=c(0,maxy*1.5), space=1, cex.names=0.6, names.arg=xstr, ylab="# SNVs")
+  mtext(side=4, text=celltypes[i])
+  for (j in 1:length(sub_vec)) {
+    xpos = h[c((j-1)*16+1,j*16)]
+    rect(xpos[1]-0.5, maxy*1.2, xpos[2]+0.5, maxy*1.3, border=NA, col=colvec[j*16])
+    text(x=mean(xpos), y=maxy*1.3, pos=3, label=sub_vec[j])
+  } 
+  dev.off()
+  }
+  mutcounts_matrix_celltypes[,i] = y
+}
+# celltypes # "B Naive"  "B Memory" "HSC"      "T Naive"  "T Memory"
+```
+
+```{r, message=FALSE, warning=FALSE}
+### Where are these mutations? Add up the number of mutations in and out of BCR/TCR regions
+#IGH: 14      106304735       107283226
+#IGL: 22      22385390        23263607
+ighst = 106304735 - 100000
+ighend = 107283226 + 100000  ### total: 1178491
+iglst = 22385390 - 100000
+iglend = 23263607 + 100000  ### total: 1078217
+# ighend-ighst + iglend-iglst # total  2,256,708
+
+### For TCR
+#14	22090055	23014042
+#7	142000819	142510972
+tcrhst = 22090055 - 100000
+tcrhend = 23014042 + 100000  ### total: 1178491
+tcrlst = 142000819 - 100000
+tcrlend = 142510972 + 100000  ### total: 1078217
+# tcrhend-tcrhst + tcrlend-tcrlst ## 1,834,140
+
+#### other VDJ recombining regions
+igkst = 89160078 # 2
+igkend = 90274237 # 2
+tcrgst = 38292979 #7
+tcrgend = 38407656 #7
+tcrdst = 22907537 #14   ## inside the TRA coordinates, so will just be labelled "TRA"
+tcrdend = 22938606 #14
+
+
+immuno_per_colony = data.frame(colony=names(somsample_list2), 
+                    n_ig = unlist(lapply(somsample_list2, FUN=function(X) sum(
+  (X$chr == 14 & X$pos > ighst & X$pos < ighend) | (X$chr == 22 & X$pos > iglst & X$pos < iglend)  | (X$chr == 2 & X$pos > igkst & X$pos < igkend) ) ) ),
+                    mean_ig = unlist(lapply(somsample_list2, FUN=function(X) mean(
+  (X$chr == 14 & X$pos > ighst & X$pos < ighend) | (X$chr == 22 & X$pos > iglst & X$pos < iglend)  | (X$chr == 2 & X$pos > igkst & X$pos < igkend) ) ) ),
+                    n_tcr = unlist(lapply(somsample_list2, FUN=function(X) sum(
+  (X$chr == 14 & X$pos > tcrhst & X$pos < tcrhend) | (X$chr == 7 & X$pos > tcrlst & X$pos < tcrlend) | (X$chr == 7 & X$pos > tcrgst & X$pos < tcrgend) | (X$chr == 14 & X$pos > tcrdst & X$pos < tcrdend) ) ) ),
+                    mean_tcr = unlist(lapply(somsample_list2, FUN=function(X) mean(
+  (X$chr == 14 & X$pos > tcrhst & X$pos < tcrhend) | (X$chr == 7 & X$pos > tcrlst & X$pos < tcrlend) | (X$chr == 7 & X$pos > tcrgst & X$pos < tcrgend) | (X$chr == 14 & X$pos > tcrdst & X$pos < tcrdend) ) ) )
+)
+
+
+immuno_per_colony3 = merge(m3, immuno_per_colony, by="colony")                                              
+immuno_names <- list('mean_ig'="BCR",'mean_tcr'="TCR")
+immunolabeller <- function(variable,value){
+  return(immuno_names[value])
+}
+
+ggplot(melt(immuno_per_colony3[,c("mean_ig", "mean_tcr", "Cell.type2")]), aes(x=Cell.type2, y=value) ) + 
+  geom_boxplot() + 
+  theme_light() +
+  facet_grid(rows=vars(variable), labeller="immunolabeller", scales = "free_y") + 
+  xlab("Cell subset") +
+  ylab("Proportion of SNVs")
+ggsave(file=paste("figures/propSNVs_BCR_TCR_", groupname,".pdf", sep=""), width=4,height=4)
+```
+
+

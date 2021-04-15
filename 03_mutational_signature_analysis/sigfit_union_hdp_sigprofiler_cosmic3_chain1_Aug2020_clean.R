@@ -23,14 +23,13 @@ if (location=="farm"){
 
 
 
-###### load in ARG380 data
-#setwd("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg")
+###### load in data
 groupname="pcawg_mm_lymph_hsc"
 
 ## We know that the colony_info file and the mutcounts_matrix samples are in the same order.
 # Otherwise, must correctly order
-mutcounts_matrix = read.table(file="/lustre/scratch116/casm/cgp/users/hm8/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/mutcounts_matrix_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg.txt", header=TRUE, stringsAsFactors=FALSE, sep="\t")
-colonyinfo_all = read.table(file="/lustre/scratch116/casm/cgp/users/hm8/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/colonyinfo_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg.txt", header=TRUE, stringsAsFactors=FALSE, sep="\t")
+mutcounts_matrix = read.table(file="../data/mutcounts_matrix_AX001_KX001_KX002_KX003_TX001_TX002_CB001.txt", header=TRUE, stringsAsFactors=FALSE, sep="\t")
+colonyinfo_all = read.table(file="../data/colonyinfo_AX001_KX001_KX002_KX003_TX001_TX002_CB001.txt", header=TRUE, stringsAsFactors=FALSE, sep="\t")
 
 ############# Make samp_type object
 Nsamp = ncol(mutcounts_matrix)
@@ -39,13 +38,13 @@ samp_type$ppindex = 1
 samp_type$cpindex = 1+1
 samp_type$dpindex = 2:(Nsamp+1)
 samp_type$samp_names = samp_type$colony
-samp_typeA = samp_type[,c("samp_names","Cell.type2","Donor","Nmut_adj_as")]
+samp_typeA = samp_type[,c("samp_names","Cell.type2","Donor","Nmut_hsc_as")]
 colnames(samp_typeA) = c("samp_names","celltype","group","Nmut")
 
 
 ############## Read in pcawg focal7 June2020 matrix
-mutpcawg = read.table("/lustre/scratch116/casm/cgp/users/hm8/pcawg/mutcounts_matrix_pcawgfocal7_mm_Aug2020.txt", stringsAsFactors = T, header=T)
-samppcawg = read.table("/lustre/scratch116/casm/cgp/users/hm8/pcawg/samplesgroups_mutcounts_matrix_pcawgfocal7_mm_Aug2020.txt", stringsAsFactors = T, header=F)
+mutpcawg = read.table("../data/mutcounts_matrix_pcawgfocal7_mm_Aug2020.txt", stringsAsFactors = T, header=T)
+samppcawg = read.table("../data/samplesgroups_mutcounts_matrix_pcawgfocal7_mm_Aug2020.txt", stringsAsFactors = T, header=F)
 colnames(samppcawg) = c("samp_names","celltype")
 samppcawg$group = samppcawg$celltype
 samppcawg$Nmut = apply(mutpcawg, MARGIN=2, FUN=sum)
@@ -90,13 +89,13 @@ samp_names = samp_type$samp_names
 
 
 ##### adding blood signature to cosmic signatures (they are in the same order)
-bloodsig = read.table("/lustre/scratch116/casm/cgp/users/hm8/lymphocyteWGS/metaAnalysis_pcawg_mm_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg_Aug2020/sigfit_cosmic3_bloodsig_Aug2020.txt", stringsAsFactors = F, header=T)
+bloodsig = read.table("../data/sigfit_cosmic3_bloodsig_Aug2020.txt", stringsAsFactors = F, header=T)
 cosmic_signatures_v3_blood = rbind(cosmic_signatures_v3, bloodsig$Signature.Blood)
 rownames(cosmic_signatures_v3_blood)[68] = "Signature.blood"
 
 
 ##### selecting the signatures that are the union of hdp and sigprofiler results
-hdp_sigprofiler = read.table(file="signatures_union_hdp_sigprofiler_min10percent.txt", header=F, stringsAsFactors = F)
+hdp_sigprofiler = read.table(file="../data/signatures_union_hdp_sigprofiler.txt", header=F, stringsAsFactors = F)
 selectsigs = cosmic_signatures_v3_blood[rownames(cosmic_signatures_v3_blood) %in% hdp_sigprofiler[,1],]
 #[1] "SBS1"            "SBS6"            "SBS7a"           "SBS8"
 #[5] "SBS9"            "SBS17b"          "SBS18"           "SBS36"
@@ -115,5 +114,5 @@ mcmc_samples_fit = fit_signatures(counts = t(mutcounts_matrix_both),
 
 ## refit to abundant signatures
 exposures <- retrieve_pars(mcmc_samples_fit, par = "exposures", hpd_prob = 0.90)
-save(samp_type, exposures, file=paste("exposures_",groupname, ".sigfit_union_hdp_sigprofiler_min10percent.chain1.Rdata", sep="") )
+save(samp_type, exposures, file=paste("exposures_",groupname, ".sigfit_union_hdp_sigprofiler_cosmic3.chain1.Rdata", sep="") )
 # save(samp_type, mcmc_samples_fit, file=paste(groupname, ".sigfit_union_hdp_sigprofiler_min10percent.chain1.Rdata", sep="") )

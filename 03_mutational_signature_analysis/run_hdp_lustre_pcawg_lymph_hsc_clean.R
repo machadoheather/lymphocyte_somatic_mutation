@@ -7,8 +7,8 @@
 
 library(hdp)
 library(ggplot2)
-#library(foreach)
-#library(doParallel)
+library(foreach)
+library(doParallel)
 library(reshape2)
 
 
@@ -80,9 +80,6 @@ mutpcawg2 = mutpcawg[,keepsamples]
 samppcawg2 = samppcawg[keepsamples,]
 
 
-
-
-
 ####### Combine two datasets
 mutcounts_matrix_both = cbind(mutcounts_matrix, mutpcawg2)
 samp_type = rbind(samp_typeA, samppcawg2)
@@ -120,16 +117,23 @@ samp_type$dpindex = 2:numdp(hdp_mut)
 
 
 # Run multiple posterior sampling chains
-chlist <- vector("list", 4)
-for (i in 1:4){
+cl <- makeCluster(4) 
+registerDoParallel(cl)
+
+
+#chlist <- vector("list", 4)
+
+chlist = foreach(i=1:4) %dopar% {
+  require(hdp)
       ###### run in parallel, remember to request enough cores when running (plus one extra?)
   hdp_activated <- dp_activate(hdp_mut, 1:numdp(hdp_mut), initcc=10, seed=i*200)
-  chlist[[i]]  <- hdp_posterior(hdp_activated,
+  chlist_part <- hdp_posterior(hdp_activated,
                                burnin=20000,
                                n=50,
                                space=200,
                                cpiter=3,
                                seed=i*1e3)
+  chlist_part
 }
 
 
