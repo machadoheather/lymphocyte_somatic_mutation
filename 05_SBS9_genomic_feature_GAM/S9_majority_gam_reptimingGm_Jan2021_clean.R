@@ -1,4 +1,12 @@
-## Nov 2020
+############################################################################################
+## File: S9_majority_gam_reptimingGm_Jan2021_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: Full model and individual GAM regressions and plotting
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
+
 # running gam of S9 mutations and genomic properties
 # Using only the Gm blood line for replication timing, and importantly keeping only sites 
 #with sufficient data (sum density signal > 95)
@@ -569,173 +577,8 @@ save(gam_fit_full, ans, file = 'hscmajority_gam_reptimingGm_fits.RData')
 
 
 
-########### Plotting regressions
-### functions
-mean_by_quantile = function(focalvalues, secondaryvalues, Nquantiles, fulldataset){
-  #Nquantiles=20
-  #focalvalues = per_bin_sig_prop[,focalcolumn]
-  #secondaryvalues = per_bin_sig_prop[,my_categories]
-  if (length(focalvalues) != nrow(secondaryvalues)){warning("Length of focalvalues do not equal number of rows of secondary values.")}
-  allvalues = data.frame(focalvalues, secondaryvalues)
-  allquantiles = seq(from=0, to=1, by=1/Nquantiles)
-  myquantiles = quantile(focalvalues, probs=allquantiles)
-  outlist = outlist_percentile = list()
-  for (i in 1:Nquantiles){
-    if (myquantiles[i] ==myquantiles[i+1]){
-      focalquantile = subset(allvalues, focalvalues==myquantiles[i])
-    } else {
-      focalquantile = subset(allvalues, focalvalues>=myquantiles[i] & focalvalues<myquantiles[i+1]) 
-    }
-    my_means = apply(focalquantile[,2:ncol(focalquantile)], MARGIN=2, FUN=mean, na.rm=TRUE)
-    my_percentiles = vector()
-    for (j in 1:length(my_means)){
-      percentile = ecdf(fulldataset[,colnames(secondaryvalues)[j]])
-      my_percentiles[j] = percentile(my_means[j])
-    }
-    outlist[[i]] = c(allquantiles[i+1],myquantiles[i+1], my_means)
-    outlist_percentile[[i]] = c(allquantiles[i+1],myquantiles[i+1], my_percentiles)
-  }
-  outDF = data.frame(do.call(rbind, outlist))
-  out_percentileDF = data.frame(do.call(rbind, outlist_percentile))
-  colnames(outDF) = c("quantile","focal_value",colnames(secondaryvalues))
-  colnames(out_percentileDF) = c("quantile","focal_value",colnames(secondaryvalues))
-  outDF$valuetype = "mean"
-  out_percentileDF$valuetype = "percentile"
-  outDF2 = data.frame(rbind(outDF, out_percentileDF))
-  return(outDF2)
-}
-
-format_regression_analyses = function(per_bin_sig_prop, focalcolumn, ind_regression_results, N, fulldataset, loess_span=0.5){
-#format_regression_analyses = function(per_bin_sig_prop, focalcolumn, mult_regression_results, ind_regression_results, N, fulldataset){
-    
-  #per_bin_sig_prop=s9_majority_props
-  #mult_regression_results=stepAIC_res
-  #ind_regression_results=indgam_S9
-  #fulldataset=s9_majority_props
-  #focalcolumn="sumS9"
-  #N=20
-  require("plyr")
-  
-  my_categories = c("ALU_rep_dist_log10","centromere_dist_log10" , "cpg_islands_dist_log10" , "cruciform_inverted_rep_dens_3e3","direct_rep_dist_log10" , "DNA_rep_dist_log10",  "DNAMethylSBS" , "DNase" ,"g4_dist_log10","gc_content_value" , "gene_dens_1e6" ,  "H2A.Z" ,"H3K27ac" , "H3K27me3" , "H3K36me3", "H3K4me1"  ,"H3K79me2", "H3K9me3", "H4K20me1" , "L1_rep_dist_log10" ,"L2_rep_dist_log10" , "LAD_dens_1e6","LTR_rep_dist_log10" ,"MIR_rep_dist_log10"  ,"recomb_rate_nearest_value" , "rep_timing_Gm","RNAseq", "short_tandem_rep_dens_3e3" ,"SIMPLE_REPEAT_rep_dist_log10" ,   "TAD_b_dist_log10" , "telomere_dist_log10", "triplex_mirror_rep_dist_log10" , "z_dna_motif_dist_log10")
- 
-  plotting_quantiles = seq(from=1/N, to=1, by=1/N)
-  #quantileN_focal = mean_by_quantile(focalvalues = non_zero[,focalcolumn], secondaryvalues = non_zero[,my_categories], Nquantiles=N, fulldataset=fulldataset)
-  quantileN_focal_all = mean_by_quantile(focalvalues = per_bin_sig_prop[,focalcolumn], secondaryvalues = per_bin_sig_prop[,my_categories], Nquantiles=N, fulldataset=fulldataset)
-  quantileN_focal_melt = melt(quantileN_focal_all, id.vars=c("quantile", "focal_value","valuetype") )
-  quantileN_focal_melt_lm = merge(quantileN_focal_melt, ind_regression_results, by.x="variable", by.y="category")
-  quantileN_focal_melt_lm$variable = factor(quantileN_focal_melt_lm$variable, levels=unique(quantileN_focal_melt_lm$variable[order(quantileN_focal_melt_lm$R2, decreasing = T)]) )
-  quantileN_focal_melt_lm$variable_new = revalue(quantileN_focal_melt_lm$variable, c("rep_timing_Gm"="Replication timing","cpg_islands_dist_log10"="CpG island", "gc_content_value" = "GC content", "LAD_dens_1e6" = "LAD density", "gene_dens_1e6" = "Gene density", "TAD_b_dist_log10" = "TAD boundaries","telomere_dist_log10" = "Telomere", "centromere_dist_log10" = "Centromere", "cruciform_inverted_rep_dens_3e3" = "Cruciform repeats", "L1_rep_dist_log10" = "L1 repeats", "SIMPLE_REPEAT_rep_dist_log10" = "Simple repeat", "DNA_rep_dist_log10"= "DNA replication", "ALU_rep_dist_log10" = "ALU repeats", "MIR_rep_dist_log10" = "MIR repeats", "g4_dist_log10" = "G-quadruplex", "LTR_rep_dist_log10" = "LTR repeats", "triplex_mirror_rep_dist_log10" = "Triplex mirror") )
-  
-  
-  ## loess smoothing
-  myvars = unique(quantileN_focal_melt_lm$variable)
-  means_list = percent_list = list()
-  for (i in 1:length(myvars)){
-    myvar_focal = subset(quantileN_focal_melt_lm, variable==myvars[i])
-    myvar_focal_percent = subset(myvar_focal, valuetype=="percentile")
-    myvar_focal_mean = subset(myvar_focal, valuetype=="mean")
-    myvar_focal_percent$value_loess = predict(loess(value~quantile, data=myvar_focal_percent, span=loess_span))
-    myvar_focal_mean$value_loess = predict(loess(value~quantile, data=myvar_focal_mean, span=loess_span))
-    means_list[[i]] = myvar_focal_mean
-    percent_list[[i]] = myvar_focal_percent
-  }
-  quantileN_focal_melt_loess = data.frame(rbind(do.call(rbind, means_list), do.call(rbind, percent_list)))
-  
-  
-  ### polygon plot prep
-  myminquantile = min(quantileN_focal_melt_loess$quantile)
-  quantileN_focal_melt_lm2 = quantileN_focal_melt_loess[order(quantileN_focal_melt_loess$quantile),]
-  quantileN_focal_melt_lm2$plotting_only = FALSE
-  tmp1 = quantileN_focal_melt_lm2[nrow(quantileN_focal_melt_lm2):1,]
-  tmp1$value = 0
-  tmp1$value_loess = 0
-  quantileN_focal_melt_lm2$plotting_only = TRUE
-  quantileN_focal_melt_lm3 = rbind(quantileN_focal_melt_lm2, tmp1)
-  quantileN_focal_melt_lm3$zero_means[quantileN_focal_melt_lm3$quantile != myminquantile | quantileN_focal_melt_lm3$plotting_only == TRUE] = 0
-  quantileN_focal_melt_lm3$zero_percentiles[quantileN_focal_melt_lm3$quantile != myminquantile | quantileN_focal_melt_lm3$plotting_only == TRUE] = 0
-  quantileN_focal_melt_lm3$zero = 0
-  return(quantileN_focal_melt_lm3)
-}
-
-
-## read in data S9
-indgam_S9 = read.table(file="individual_gam.S9_majority_props_reptimingGm.txt", header=T, stringsAsFactors = F)
-s9_majority_props = read.table(file="s9_majority_props_reptimingGm.txt", header=T, stringsAsFactors=F)
-# stepAIC_res
-load(file="S9majority_gam_reptimingGm_fits.RData")
-s9_ans = ans
-## X1 (S1 + Sblood)
-# stepAIC_res_Sblood
-s1_majority_props = read.table(file="s1_majority_props_reptimingGm.txt", header=T, stringsAsFactors = F)
-indgam_s1 = read.table(file="individual_gam.s1_majority_props_reptimingGm.txt", header=T, stringsAsFactors = F)
-load(file = 's1majority_gam_reptimingGm_fits.RData')
-s1_ans = ans
-
-# Calculate summaries per quantile and loess smoothing (span=0.3)
-quantile20_S9 = format_regression_analyses(per_bin_sig_prop=s9_majority_props, focalcolumn="sumS9", ind_regression_results=indgam_S9, N=100, fulldataset=s9_majority_props)
-quantile20_S9$dataset = "SBS9"
-quantile20_S9$glm_sig = "no"
-quantile20_S9$glm_sig[quantile20_S9$variable %in% s9_ans[[6]] ] = "yes"
-
-quantile20_S1 = format_regression_analyses(per_bin_sig_prop=s1_majority_props, focalcolumn="sumX1", ind_regression_results=indgam_s1, N=100, fulldataset=s1_majority_props)
-quantile20_S1$dataset = "SBS1/blood"
-quantile20_S1$glm_sig = "no"
-quantile20_S1$glm_sig[quantile20_S1$variable %in% s1_ans[[6]] ] = "yes"
-
-
-### Plotting both
-focalres = rbind(quantile20_S9, quantile20_S1)
-focalres$sig_text = ""
-focalres$sig_text[focalres$glm_sig=="yes"] = "*"
-focalres$dataset = factor(focalres$dataset, levels=c("SBS9"  ,     "SBS1/blood"))
-focalres$variable_new2 = focalres$variable_new
-focalres$variable_new2 = revalue(focalres$variable_new2, c("Replication timing" = "Replication\n timing", "Cruciform repeats"= "Cruciform\n repeats", "recomb_rate_nearest_value" = "Recomb.\n rate", "G-quadruplex"="G-\n 4plex", "Gene density"="Gene\n density", "GC content"="GC\n content", "LAD density"="LAD\n density", "LTR repeats"="LTR\n repeats", "CpG island"="CpG\n island", "DNA replication"="DNA\n replication", "Centromere" = "Centromere") )
-#save(focalres, file="S9_S1_table_forplotting_loess5.Rdata")
-
-#library(extrafont)
-#font_import()
-ggplot(subset(focalres, variable_new %in% unique(focalres$variable_new[focalres$glm_sig=="yes" & focalres$R2>0.0025] ) & valuetype=="percentile" ), aes(x=quantile, y=value_loess, fill=R2))+
-  geom_polygon(mapping=aes(x=quantile, y=value_loess), color="black")+
-  #geom_col(mapping=aes(x=zero, y=zero_percentiles), width=0.05, fill="black") +
-  geom_text(mapping=aes(x=0.5, y=0.1, label=sig_text)) +
-  scale_fill_gradient2("R2",  low = "#0571b0",
-                       mid = "white",
-                       high = "#ca0020" )+
-  facet_grid(dataset~variable_new2, switch="y")+
-  theme_cowplot()+
-  ylab("Genomic attribute quantile")+
-  xlab("Mutation burden quantile")+
-  theme(
-    axis.ticks=element_blank(),
-    axis.text=element_blank(), 
-    #axis.text=element_text(size=8), 
-    panel.border=element_blank(),
-    panel.background=element_blank(),
-    #strip.text.x = element_text(angle=90, hjust = 0),
-    strip.text = element_text(size=8),
-    strip.background.x = element_blank(),
-    strip.background.y = element_blank(),
-    axis.line=element_blank(),
-    #axis.text=element_text(size=8),
-    axis.title=element_text(size=10),
-    legend.title = element_text(size = 10),
-    legend.text = element_text(size = 8), 
-    legend.key.size = unit(0.35, 'cm'),
-    panel.spacing = unit(0.2, "lines")
-    #strip.text = element_text(margin = margin(0, 0,0,0, "cm"))
-    #plot.margin = unit(c(0, 0, 0, 0), "cm") )
-  )
-ggsave(file="S9S1bloodreg_polygonperattribute_NmutQuant_attributeQuant_reptimingGm_loess5.pdf", width=8.25, height=2)
-#ggsave(file="S9S1bloodreg_polygonperattribute_NmutQuant_attributeQuant_reptimingGm_loess5.png", width=8, height=3.5)
-
-
-
-
-
-
-
 ###############################################################
-####### Alternative plots:
+####### Plotting results
 ## One large plot for SBS9 vs replication timing
 ## Two sets of barplots, height being R2, per significant factor in SBS9 and SBSblood
 library("tidymv")

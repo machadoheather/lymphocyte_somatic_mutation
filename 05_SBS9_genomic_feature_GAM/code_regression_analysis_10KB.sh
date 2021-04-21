@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 
-## Jan 2020
+############################################################################################
+## File: code_regression_analysis_10KB.sh
+## Project: lymphocyte_somatic_mutation
+## Description: Helper script to run/combine genomic feature extraction and attribution
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
 
 module load R/3.6.1
 
@@ -26,13 +33,11 @@ bsub -J trinuc_win -q normal -R 'select[mem>=8000] rusage[mem=8000]' -M8000 -e b
 #   input:  per_window_attributes.Rdata (int_files/S9attributed_window1000bp_chr$chrom.Rdata)
 #           signature: S9
 #   output: per_window_attributes_S9exp.txt (int_files/windows1kb_S9attribute_S9exp_chr$chrom.txt)
-
-### Need to do!!
-signature=S9
+#signature=S9
 #signature=S1
-while read chrom; do
-    bsub -J S9exp_win -n1 -R "select[mem>16000]" -R "rusage[mem=16000]" -M 16000 -R "span[hosts=1]" -q long -e error.%J -o output.%J Rscript scripts/signature_expectation_per_window.R int_files/$signature\attributed_window10000bp_chr$chrom.Rdata int_files/$signature\exp_$signature\attributed_window10000bp_chr$chrom.txt $signature
-done < ../regression_analysis/chrom_list.txt
+#while read chrom; do
+#    bsub -J S9exp_win -n1 -R "select[mem>16000]" -R "rusage[mem=16000]" -M 16000 -R "span[hosts=1]" -q long -e error.%J -o output.%J Rscript scripts/signature_expectation_per_window.R int_files/$signature\attributed_window10000bp_chr$chrom.Rdata int_files/$signature\exp_$signature\attributed_window10000bp_chr$chrom.txt $signature
+#done < ../regression_analysis/chrom_list.txt
 
 
 3) Get per window genomic features (run for each chromosome, maybe for each signature)

@@ -1,7 +1,14 @@
-### Identifying RAG mediated deletions
-# testing if we can just use the heptamer
+############################################################################################
+## File: analyze_RAGmotif_heptamer_July2020_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: RAG motif analysis, signal decay with distance from bp
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
 
-### July, 2020
+
+### Identifying RAG mediated deletions
 library(tidyverse)
 library(stringr)
 library(magrittr)
@@ -13,96 +20,101 @@ library(reshape2)
 
 
 
-setwd("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/RAGmotifs")
+mydistances = c(0,5,10,15,20,25,50,75,100,125,150,175,200,300,400,500,600,700,800,900,1000,5000,10000)
+for (d in 1:length(mydistances)){
+  ## Reading in filtered data
+  brassfiltered = read.csv(file="../data/brass_ascat_curated.csv", stringsAsFactors = F, header=T)  # 1160   91
+  myfiltered = subset(brassfiltered, Correct != FALSE & !(is.na(start1)) )
+  myfiltered$ID = paste(myfiltered$chr1, myfiltered$start1, myfiltered$chr2, myfiltered$start2, myfiltered$svclass, sep="_")
+  myfiltered$strand1 = "+"
+  myfiltered$strand2 = "+"
 
-# 
-# mydistances = c(0,5,10,15,20,25,50,75,100,125,150,175,200,300,400,500,600,700,800,900,1000,5000,10000)
-# for (d in 1:length(mydistances)){
-#   ## Reading in filtered data
-#   brassfiltered = read.csv(file="../brass_ascat_curated.csv", stringsAsFactors = F, header=T)  # 1160   91
-#   myfiltered = subset(brassfiltered, Correct != FALSE & !(is.na(start1)) )
-#   myfiltered$ID = paste(myfiltered$chr1, myfiltered$start1, myfiltered$chr2, myfiltered$start2, myfiltered$svclass, sep="_")
-#   myfiltered$strand1 = "+"
-#   myfiltered$strand2 = "+"
-#   
-#   ## Fetching the flanking sequences
-#   mygranges1 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr1", start.field="start1", end.field="end1", strand.field="strand1", keep.extra.columns=TRUE)
-#   mygranges2 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr2", start.field="start2", end.field="end2", strand.field="strand2", keep.extra.columns=TRUE)
-#   
-#   focaldist = mydistances[d]  
-#   
-#   # _c. Get breakpoint flanking sequence ------------------------------------
-#   # __i. Get 50bp offsets ---------------------------------------------------
-#   # Make Grange around each breakpoint with flank 50bp
-#   brkpt.1.ext.gr <- promoters( shift(mygranges1, -focaldist), upstream = 50, downstream = 0)
-#   brkpt.2.ext.gr <- promoters(shift(mygranges2, focaldist), upstream = 0, downstream = 50)
-#   brkpt.1.int.gr <- promoters( shift(mygranges1, focaldist), upstream = 0, downstream = 50)
-#   brkpt.2.int.gr <- promoters(shift(mygranges2, -focaldist), upstream = 50, downstream = 0)
-#   
-#   # # __ii. Get Sequence ------------------------------------------------------
-#   # Make list of sequences and fasta style name
-#   brkpt.1.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.ext.gr, as.character = T))
-#   names(brkpt.1.ext.gr.seq) <- paste0(">bp1_ext_", myfiltered$id.name, "_", myfiltered$sample)
-#   
-#   brkpt.2.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.ext.gr, as.character = T))
-#   names(brkpt.2.ext.gr.seq) <- paste0(">bp2_ext_", myfiltered$id.name, "_", myfiltered$sample)
-#   
-#   brkpt.1.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.int.gr, as.character = T))
-#   names(brkpt.1.int.gr.seq) <- paste0(">bp1_int_", myfiltered$id.name, "_", myfiltered$sample)
-#   
-#   brkpt.2.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.int.gr, as.character = T))
-#   names(brkpt.2.int.gr.seq) <- paste0(">bp2_int_", myfiltered$id.name, "_", myfiltered$sample)
-#   
-#   # Add fasta name to original file bp1 & bp2
-#   myfiltered$bp1_ext_uniID <- names(brkpt.1.ext.gr.seq)
-#   myfiltered$bp2_ext_uniID <- names(brkpt.2.ext.gr.seq)
-#   myfiltered$bp1_int_uniID <- names(brkpt.1.int.gr.seq)
-#   myfiltered$bp2_int_uniID <- names(brkpt.2.int.gr.seq)
-#   
-#   ## Annotate VDJ regions in original SV file
-#   ighst = 106304735 # 14
-#   ighend = 107283226 # 14
-#   iglst = 22385390 # 22
-#   iglend = 23263607 # 22
-#   tcrhst = 22090055 # 14 TRA
-#   tcrhend = 23014042 # 14
-#   tcrlst = 142000819 # 7  TRB
-#   tcrlend = 142510972 # 7
-#   
-#   igkst = 89160078 # 2
-#   igkend = 90274237 # 2
-#   tcrgst = 38292979 #7
-#   tcrgend = 38407656 #7
-#   tcrdst = 22907537 #14   ## inside the TRA coordinates, so will just be labelled "TRA"
-#   tcrdend = 22938606 #14
-#   
-#   cs_start = 106053274
-#   cs_end = 106322322
-#   
-#   VDJlocus = vector()
-#   for (i in 1:nrow(myfiltered)){
-#     X = myfiltered[i,]
-#     length(X)
-#     if ( (X$chr1 == 14 & X$start1 > ighst-1000 & X$start1 < ighend+1000) | (X$chr2 == 14 & X$end2 > ighst-1000 & X$end2 < ighend+1000 ) ) {VDJlocus[i] = "igh"} else
-#       if ( (X$chr1 == 22 & X$start1 > iglst-1000 & X$start1 < iglend+1000) |  (X$chr2 == 22 & X$end2 > iglst-1000 & X$end2 < iglend+1000) ) {VDJlocus[i] = "igl"} else
-#         if ( (X$chr1 == 14 & X$start1 > tcrhst-1000 & X$start1 < tcrhend+1000) | (X$chr2 == 14 & X$end2 > tcrhst-1000 & X$end2 < tcrhend+1000) )  {VDJlocus[i] = "tra"} else
-#           if ( (X$chr1 == 7 & X$start1 > tcrlst-1000 & X$start1 < tcrlend+1000) | (X$chr2 == 7 & X$end2 > tcrlst-1000 & X$end2 < tcrlend+1000) ){VDJlocus[i] = "trb"} else
-#             if  ( (X$chr1 == 2 & X$start1 > igkst-1000 & X$start1 < igkend+1000) | (X$chr2 == 2 & X$end2 > igkst-1000 & X$end2 < igkend+1000) ) {VDJlocus[i] = "igk"} else
-#               if ( (X$chr1 == 7 & X$start1 > tcrgst-1000 & X$start1 < tcrgend+1000) | (X$chr2 == 7 & X$end2 > tcrgst-1000 & X$end2 < tcrgend+1000) ) {VDJlocus[i] = "trg"} else
-#                 if ( (X$chr1 == 14 & X$start1 > tcrdst-1000 & X$start1 < tcrdend+1000) | (X$chr2 == 14 & X$end2 > tcrdst-1000 & X$end2 < tcrdend+1000) ) {VDJlocus[i] = "trd"} else
-#                   if ( (X$chr1 == 14 & X$start1 > cs_start-1000 & X$start1 < cs_end+1000) | (X$chr2 == 14 & X$end2 > cs_start-1000 & X$end2 < cs_end+1000) ) {VDJlocus[i] = "classS"} else
-#                   {VDJlocus[i] = FALSE}
-#   }
-#   myfiltered$VDJlocus = VDJlocus
-#   
-#   write.table(myfiltered, file=paste("/Users/hm8/volumes/hm8_network/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/RAGmotif/motifnames_brassfiltered_all_", focaldist,"bp_July2019.txt", sep=""), quote=FALSE, col.names = T, row.names = F, sep="\t")
-#   
-#   ## Write out fasta for MEME of FIMO
-#   # only write unique lines
-#   meme.fasta <- c(rbind(c(names(brkpt.1.ext.gr.seq), names(brkpt.2.ext.gr.seq),names(brkpt.1.int.gr.seq), names(brkpt.2.int.gr.seq) ), c(unlist(brkpt.1.ext.gr.seq), unlist(brkpt.2.ext.gr.seq), unlist(brkpt.1.int.gr.seq), unlist(brkpt.2.int.gr.seq) )))
-#   writeLines(meme.fasta, paste("/Users/hm8/volumes/hm8_network/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/RAGmotif/MEME_brassfiltered_all_", focaldist, "bp_July2019.fasta", sep="")  )
-# }
-# 
+  ## Fetching the flanking sequences
+  mygranges1 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr1", start.field="start1", end.field="end1", strand.field="strand1", keep.extra.columns=TRUE)
+  mygranges2 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr2", start.field="start2", end.field="end2", strand.field="strand2", keep.extra.columns=TRUE)
+
+  focaldist = mydistances[d]
+
+  # _c. Get breakpoint flanking sequence ------------------------------------
+  # __i. Get 50bp offsets ---------------------------------------------------
+  # Make Grange around each breakpoint with flank 50bp
+  brkpt.1.ext.gr <- promoters( shift(mygranges1, -focaldist), upstream = 50, downstream = 0)
+  brkpt.2.ext.gr <- promoters(shift(mygranges2, focaldist), upstream = 0, downstream = 50)
+  brkpt.1.int.gr <- promoters( shift(mygranges1, focaldist), upstream = 0, downstream = 50)
+  brkpt.2.int.gr <- promoters(shift(mygranges2, -focaldist), upstream = 50, downstream = 0)
+
+  # # __ii. Get Sequence ------------------------------------------------------
+  # Make list of sequences and fasta style name
+  brkpt.1.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.ext.gr, as.character = T))
+  names(brkpt.1.ext.gr.seq) <- paste0(">bp1_ext_", myfiltered$id.name, "_", myfiltered$sample)
+
+  brkpt.2.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.ext.gr, as.character = T))
+  names(brkpt.2.ext.gr.seq) <- paste0(">bp2_ext_", myfiltered$id.name, "_", myfiltered$sample)
+
+  brkpt.1.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.int.gr, as.character = T))
+  names(brkpt.1.int.gr.seq) <- paste0(">bp1_int_", myfiltered$id.name, "_", myfiltered$sample)
+
+  brkpt.2.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.int.gr, as.character = T))
+  names(brkpt.2.int.gr.seq) <- paste0(">bp2_int_", myfiltered$id.name, "_", myfiltered$sample)
+
+  # Add fasta name to original file bp1 & bp2
+  myfiltered$bp1_ext_uniID <- names(brkpt.1.ext.gr.seq)
+  myfiltered$bp2_ext_uniID <- names(brkpt.2.ext.gr.seq)
+  myfiltered$bp1_int_uniID <- names(brkpt.1.int.gr.seq)
+  myfiltered$bp2_int_uniID <- names(brkpt.2.int.gr.seq)
+
+  ## Annotate VDJ regions in original SV file
+  ighst = 106304735 # 14
+  ighend = 107283226 # 14
+  iglst = 22385390 # 22
+  iglend = 23263607 # 22
+  tcrhst = 22090055 # 14 TRA
+  tcrhend = 23014042 # 14
+  tcrlst = 142000819 # 7  TRB
+  tcrlend = 142510972 # 7
+
+  igkst = 89160078 # 2
+  igkend = 90274237 # 2
+  tcrgst = 38292979 #7
+  tcrgend = 38407656 #7
+  tcrdst = 22907537 #14   ## inside the TRA coordinates, so will just be labelled "TRA"
+  tcrdend = 22938606 #14
+
+  cs_start = 106053274
+  cs_end = 106322322
+
+  VDJlocus = vector()
+  for (i in 1:nrow(myfiltered)){
+    X = myfiltered[i,]
+    length(X)
+    if ( (X$chr1 == 14 & X$start1 > ighst-1000 & X$start1 < ighend+1000) | (X$chr2 == 14 & X$end2 > ighst-1000 & X$end2 < ighend+1000 ) ) {VDJlocus[i] = "igh"} else
+      if ( (X$chr1 == 22 & X$start1 > iglst-1000 & X$start1 < iglend+1000) |  (X$chr2 == 22 & X$end2 > iglst-1000 & X$end2 < iglend+1000) ) {VDJlocus[i] = "igl"} else
+        if ( (X$chr1 == 14 & X$start1 > tcrhst-1000 & X$start1 < tcrhend+1000) | (X$chr2 == 14 & X$end2 > tcrhst-1000 & X$end2 < tcrhend+1000) )  {VDJlocus[i] = "tra"} else
+          if ( (X$chr1 == 7 & X$start1 > tcrlst-1000 & X$start1 < tcrlend+1000) | (X$chr2 == 7 & X$end2 > tcrlst-1000 & X$end2 < tcrlend+1000) ){VDJlocus[i] = "trb"} else
+            if  ( (X$chr1 == 2 & X$start1 > igkst-1000 & X$start1 < igkend+1000) | (X$chr2 == 2 & X$end2 > igkst-1000 & X$end2 < igkend+1000) ) {VDJlocus[i] = "igk"} else
+              if ( (X$chr1 == 7 & X$start1 > tcrgst-1000 & X$start1 < tcrgend+1000) | (X$chr2 == 7 & X$end2 > tcrgst-1000 & X$end2 < tcrgend+1000) ) {VDJlocus[i] = "trg"} else
+                if ( (X$chr1 == 14 & X$start1 > tcrdst-1000 & X$start1 < tcrdend+1000) | (X$chr2 == 14 & X$end2 > tcrdst-1000 & X$end2 < tcrdend+1000) ) {VDJlocus[i] = "trd"} else
+                  if ( (X$chr1 == 14 & X$start1 > cs_start-1000 & X$start1 < cs_end+1000) | (X$chr2 == 14 & X$end2 > cs_start-1000 & X$end2 < cs_end+1000) ) {VDJlocus[i] = "classS"} else
+                  {VDJlocus[i] = FALSE}
+  }
+  myfiltered$VDJlocus = VDJlocus
+
+  write.table(myfiltered, file=paste("motifnames_brassfiltered_all_", focaldist,"bp_July2019.txt", sep=""), quote=FALSE, col.names = T, row.names = F, sep="\t")
+
+  ## Write out fasta for MEME of FIMO
+  # only write unique lines
+  meme.fasta <- c(rbind(c(names(brkpt.1.ext.gr.seq), names(brkpt.2.ext.gr.seq),names(brkpt.1.int.gr.seq), names(brkpt.2.int.gr.seq) ), c(unlist(brkpt.1.ext.gr.seq), unlist(brkpt.2.ext.gr.seq), unlist(brkpt.1.int.gr.seq), unlist(brkpt.2.int.gr.seq) )))
+  writeLines(meme.fasta, paste("MEME_brassfiltered_all_", focaldist, "bp_July2019.fasta", sep="")  )
+}
+
+
+
+###########################################################################################################################
+############################# Run FIMO to detect RSS motifs in the sequences from the fasta's just written
+## FIMO options (website)
+# fimo --oc . --verbosity 1 --thresh 1.0E-4 RAG-motif_hepnon_combined.meme.txt 20190712_RAGfullmotif_MEME_filtered_updown_split.fasta
+###########################################################################################################################
+
 
 
 
@@ -114,8 +126,8 @@ for (d in 1:length(mydistances)){
   
   focaldist = mydistances[d]
   
-  myfiltered = read.table(file=paste("/Users/hm8/volumes/hm8_network/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/RAGmotif/motifnames_brassfiltered_all_", focaldist,"bp_July2019.txt", sep=""), header = T, stringsAsFactors = F, sep="\t")
-  fimoALL = read.table(paste("/Users/hm8/volumes/hm8_network/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/RAGmotif/decay_",focaldist,"bp/fimo.tsv", sep=""), header=TRUE, stringsAsFactors = F, sep="\t")
+  myfiltered = read.table(file=paste("motifnames_brassfiltered_all_", focaldist,"bp_July2019.txt", sep=""), header = T, stringsAsFactors = F, sep="\t")
+  fimoALL = read.table(paste("decay_",focaldist,"bp/fimo.tsv", sep=""), header=TRUE, stringsAsFactors = F, sep="\t")
   pvalue = 1e-4
   fimo = fimoALL[fimoALL$p.value<pvalue,]
   fimo_names = unlist(lapply(fimo$sequence_name, FUN=function(X) paste(">", X, sep="")))
@@ -200,47 +212,14 @@ decay_summary = data.frame(dist=mydistances, mean.vdj, mean.vdj.int, mean.vdj.ex
 decay_summary_sym = data.frame(dist=c(mydistances, -mydistances), mean.vdj=c(mean.vdj.int, mean.vdj.ext), mean.nonvdj=c(mean.nonvdj.int, mean.nonvdj.ext),  mean.total= c(mean.total.int, mean.total.ext))
 decay_summary_sym2 = melt(decay_summary_sym[,c(1,3,4)], id.vars="dist")
 
-# 
-# ggplot(decay_summary_sym, aes(dist, mean.nonvdj))+
-#   geom_vline(xintercept = 0, lty=2)+
-#   geom_line(color="#e7298a")+
-#   scale_x_continuous(limits = c(-300,300))+
-#   scale_y_continuous(expand = expand_scale(mult = c(0.1, 0.2)) )+
-#   theme_light()+
-#   xlab("")+
-#   ylab("RAG motif (prop.)")+
-#   ggtitle("non-Ig/TCR SVs")+
-#   theme(#strip.text = element_text(hjust = 0, size=10, face="bold"),
-#         panel.grid.major = element_blank(),
-#         panel.grid.minor = element_blank(),
-#         strip.background = element_blank(),
-#         panel.border = element_rect(colour = "black") )
-# ggsave("RAG_decay_nonVDJ.pdf", width=6,height=2)
-# 
-# ggplot(decay_summary_sym, aes(dist, mean.vdj))+
-#   geom_vline(xintercept = 0, lty=2)+
-#   geom_line(color="#1b9e77")+
-#   scale_x_continuous(limits = c(-300,300))+
-#   scale_y_continuous(expand = expand_scale(mult = c(0.1, 0.2)) )+
-#   theme_light()+
-#   xlab("")+
-#   ggtitle("Ig/TCR SVs")+
-#   ylab("RAG motif (prop.)")+
-#   theme(#strip.text = element_text(hjust = 0, size=10, face="bold"),
-#     panel.grid.major = element_blank(),
-#     panel.grid.minor = element_blank(),
-#     strip.background = element_blank(),
-#     panel.border = element_rect(colour = "black") )
-# ggsave("RAG_decay_VDJ.pdf", width=6,height=2)
 
-
-mybackground = read.table("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/genomic_controls/RAG/results_RAGmotif_genomiccontrol.txt", header=T, stringsAsFactors = F)
+#### include genomic background rate
+mybackground = read.table("../data/results_RAGmotif_genomiccontrol.txt", header=T, stringsAsFactors = F)
 median(mybackground$m.raghit_int) ## ext is equivalent: median(mybackground$m.raghit_ext)
 # 0.05103042
 
-### same plots but starting 25bp off
+### starting 25bp off (midpoint)
 decay_summary_sym_25bp = data.frame(dist=c(mydistances+25, -mydistances-25), mean.vdj=c(mean.vdj.int, mean.vdj.ext), mean.nonvdj=c(mean.nonvdj.int, mean.nonvdj.ext),  mean.total= c(mean.total.int, mean.total.ext))
-#decay_summary_sym2 = melt(decay_summary_sym[,c(1,3,4)], id.vars="dist")
 
 ggplot(subset(decay_summary_sym_25bp, dist>0), aes(dist, mean.nonvdj))+
   geom_vline(xintercept = 0, lty=1 ,col="grey")+

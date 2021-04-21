@@ -1,11 +1,15 @@
-# ---
-#   title: "run_hdp_lustre_pcawg_lymph_hsc"
-# ---
-# Feb 2019
+############################################################################################
+## File: sigfit_union_hdp_sigprofiler_cosmic3_chain1_Aug2020_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: sigfit per-genome signature attribution: all signatures
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
+
 
 
 library(sigfit)
-#data("cosmic_signatures_v2")
 data("cosmic_signatures_v3")
 
 location="farm"
@@ -51,27 +55,6 @@ samppcawg$Nmut = apply(mutpcawg, MARGIN=2, FUN=sum)
 
 # exclude those with more than 100K mutations:
 keepsamples = which(samppcawg$Nmut < 60000 & samppcawg$celltype %in% c("Lymph-BNHL","Lymph-CLL","mm","Myeloid-AML") )
-#samp_names         celltype            group
-#102 f9dc999f-6dde-448d-9cf1-2897ddcf7b0b       Lymph-BNHL       Lymph-BNHL
-#216 04aa6b77-8074-480c-872e-a1a47afa5314    Skin-Melanoma    Skin-Melanoma
-#219 0ab4d782-9a50-48b9-96e4-6ce42b2ea034    Skin-Melanoma    Skin-Melanoma
-#220 0dd0718d-5ddf-4c59-8c47-0f51303daeb5    Skin-Melanoma    Skin-Melanoma
-#221 108749d2-5c62-4ef1-92df-aec6941ba53b    Skin-Melanoma    Skin-Melanoma
-#236 00aa769d-622c-433e-8a8a-63fb5c41ea42 ColoRect-AdenoCA ColoRect-AdenoCA
-#241 0980e7fd-051d-45e9-9ca6-2baf073da4e8 ColoRect-AdenoCA ColoRect-AdenoCA
-#244 14c5b81d-da49-4db1-9834-77711c2b1d38 ColoRect-AdenoCA ColoRect-AdenoCA
-#245 154f80bd-984c-4792-bb89-20c4da0c08e0 ColoRect-AdenoCA ColoRect-AdenoCA
-#Nmut
-#102  112529
-#216  744553
-#219  214810
-#220  159349
-#221  105876
-#236  234231
-#241  849282
-#244 2426470
-#245  259867
-
 mutpcawg2 = mutpcawg[,keepsamples]
 samppcawg2 = samppcawg[keepsamples,]
 
@@ -115,4 +98,3 @@ mcmc_samples_fit = fit_signatures(counts = t(mutcounts_matrix_both),
 ## refit to abundant signatures
 exposures <- retrieve_pars(mcmc_samples_fit, par = "exposures", hpd_prob = 0.90)
 save(samp_type, exposures, file=paste("exposures_",groupname, ".sigfit_union_hdp_sigprofiler_cosmic3.chain1.Rdata", sep="") )
-# save(samp_type, mcmc_samples_fit, file=paste(groupname, ".sigfit_union_hdp_sigprofiler_min10percent.chain1.Rdata", sep="") )

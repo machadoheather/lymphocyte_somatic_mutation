@@ -1,25 +1,17 @@
-# ---
-#   title: "run_hdp_lustre_pcawg_lymph_hsc"
-# ---
-# Feb 2019
+############################################################################################
+## File: sigfit_pcawg_1Mb_Sep2020_min10percent_IgDenovo_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: sigfit per-Mb signature attribution (malignancy)
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
+
 
 library(sigfit)
-#data("cosmic_signatures_v2")
 data("cosmic_signatures_v3")
 
-location="farm"
-#location="local"
-
-if (location=="farm"){
-  root="/lustre/scratch116/casm/cgp/users/hm8"
-} else if (location=="local"){
-  root="/Users/hm8/volumes/hm8_network"
-} else {
-  warning("location not set- using current directory")
-  root=getwd()
-}
-
-
+## Run command line arguments of chromosome and dataset
 args = commandArgs(trailingOnly = TRUE)
 chrom = args[1]
 group = args[2]
@@ -32,7 +24,7 @@ cosmic_signatures_v3_blood = rbind(cosmic_signatures_v3, bloodsig$Signature.Bloo
 rownames(cosmic_signatures_v3_blood)[68] = "Signature.blood"
 
 ##### selecting the signatures that are the union of hdp and sigprofiler results
-hdp_sigprofiler = read.table(file="..data/signatures_union_hdp_sigprofiler_min10percent_memB.txt", header=F, stringsAsFactors = F)
+hdp_sigprofiler = read.table(file="../data/signatures_union_hdp_sigprofiler_min10percent_memB.txt", header=F, stringsAsFactors = F)
 selectsigsA = cosmic_signatures_v3_blood[rownames(cosmic_signatures_v3_blood) %in% hdp_sigprofiler[,1],]
 #[1] "SBS1"            "SBS6"            "SBS7a"           "SBS8"
 #[5] "SBS9"            "SBS17b"          "SBS18"           "SBS36"

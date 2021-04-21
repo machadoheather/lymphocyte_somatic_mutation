@@ -1,8 +1,14 @@
-## July 1, 2019
-# Per MB signature analysis (memory B cells)
+############################################################################################
+## File: mutsig_byregion_hdp_denovo_Oct2020_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: hdp denovo extraction of the SHM signature
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
 
-setwd("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/mutsig_byregion/mutsig_byregion_hdp_denovo")
 
+#setwd("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/mutsig_byregion/mutsig_byregion_hdp_denovo")
 library("GenomicRanges")
 library("Rsamtools")
 library("MASS")
@@ -17,7 +23,9 @@ library(RColorBrewer)
 ################ Run hdp (with aid priors (and cosmic?) priors)
 ################################################################################################
 groupname = "by_1MB"
-load(file="/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/mutsig_byregion/mutmats_byregion.Rdata")
+
+## Mutation matrix of memory B cells per 1MB bin
+load(file="../data/mutmats_byregion_bin1000000.Rdata")
 
 ## Choose dataset to use
 my_prior="noprior"
@@ -99,9 +107,6 @@ plot_dp_comp_exposure(luad_multi, samp_type$dpindex, incl_nonsig = F,incl_numdat
                       col=c('black', RColorBrewer::brewer.pal(8, "Set1")))
 dev.off()
 
-## Results are similar regardless of strength of prior- focusing on prior=1000 for rest of analysis 
-
-
 
 ################# Extracting components for plotting (sig_prop per sample, CI's)
 inds = samp_type$dpindex
@@ -133,8 +138,8 @@ sig_prop$Nmut = samp_type$Nmut  # 230 bins had no mutations
 
 
 
-############## Calculate cosine similarity
-pcawg.sigs <- read.csv(paste('/Users/hm8/sanger/reference_files/sigProfiler_SBS_signatures_2019_05_22.csv', sep=""), header=TRUE)
+############## Calculate cosine similarity with known signatures
+pcawg.sigs <- read.csv(paste('../data/sigProfiler_SBS_signatures_2019_05_22.csv', sep=""), header=TRUE)
 #  sort by Substitution Type and Trinucleotide
 pcawg.sigs <- pcawg.sigs[order(pcawg.sigs$Type, pcawg.sigs$SubType),]
 prior_sigsP1 <- as.matrix(pcawg.sigs[,grep('SB', colnames(pcawg.sigs))])
@@ -146,11 +151,11 @@ for (i in 1:length(colsum1)){
   prior_sigsP[,i] = prior_sigsP1[,i]/colsum1[i]
 }
 
-#### adding cAID signatures (IGH/L region)
-francAID = read.table("/Users/hm8/sanger/example_code/francesco_cAID/c-AID.txt", stringsAsFactors = F, header=T)
+#### adding signatures of IGH/L region from CLL samples to check similarity
+francAID = read.table("../data/c-AID_maura.txt", stringsAsFactors = F, header=T)
 
 ## blood sig
-bloodsig = read.table("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/bloodsignature_analysis/BloodSig_analysis_Aug2020/sigfit_cosmic3_bloodsig_Aug2020.txt" , stringsAsFactors = F, header=T)
+bloodsig = read.table("../data/sigfit_cosmic3_bloodsig_Aug2020.txt" , stringsAsFactors = F, header=T)
 selectsigs = data.frame(prior_sigsP, Signature.Ig=francAID$x, SBSblood = bloodsig$Signature.Blood)
 
 
@@ -180,51 +185,8 @@ write.table(t(comp_trinuc[[1]]), file=paste("comp_trinuc_allsigs.txt", sep=""), 
 
 ######################## Plotting proportions
 sig_prop_type = data.frame(samples=sig_prop$samples, Nmut=sig_prop$Nmut, Cell.type2 = "B Memory", sig_prop[,c(1:Nsig)] )
+colnames(sig_prop_type) = c("samples", "Nmut", "Cell.type2", "X0", "X1","S9_cos88","S9_cos94", "X4","SIg")
+sig_prop_type$S9 = sig_prop_type$S9_cos88 + sig_prop_type$S9_cos94
 save(sig_prop_type, sig_propCI, file=paste("sig_prop.", name_sigs, ".", my_prior,".",groupname, ".Rdata", sep=""))
 
-colnames(sig_prop_type) = c("samples", "Nmut", "Cell.type2", "X0", "X1","S9_cos88","S9_cos94", "X4","SIg")
-sig_prop_type$S9 = sig_prop_type$S9_cos88 + sig_prop_type$S9_cos94
 
-head(sig_prop_type[order(sig_prop_type$S9_cos88, decreasing = T), ])
-head(sig_prop_type[order(sig_prop_type$S9_cos94, decreasing = T), ])
-head(sig_prop_type[order(sig_prop_type$S9, decreasing = T), ])
-head(sig_prop_type[order(sig_prop_type$SIg, decreasing = T), ])
-
-
-
-
-########## RE-START HERE
-groupname = "by_1MB"
-my_prior="noprior"
-name_sigs = "memB"
-load(file=paste("sig_prop.", name_sigs, ".", my_prior,".",groupname, ".Rdata", sep=""))
-colnames(sig_prop_type) = c("samples", "Nmut", "Cell.type2", "X0", "X1","S9_cos88","S9_cos94", "X4","SIg")
-sig_prop_type$S9 = sig_prop_type$S9_cos88 + sig_prop_type$S9_cos94
-sig_prop_typeNA = na.omit(sig_prop_type)
-S9_2sdmean = mean(sig_prop_typeNA$S9*sig_prop_typeNA$Nmut) + 2*sd(sig_prop_typeNA$S9*sig_prop_typeNA$Nmut)
-# 67.60996
-sum(sig_prop_typeNA$S9*sig_prop_typeNA$Nmut > S9_2sdmean)
-# 198
-
-SIg_2sdmean = mean(sig_prop_typeNA$SIg*sig_prop_typeNA$Nmut) + 2*sd(sig_prop_typeNA$SIg*sig_prop_typeNA$Nmut)
-# 19.09049
-sum(sig_prop_typeNA$SIg*sig_prop_typeNA$Nmut > SIg_2sdmean)
-#9
-# non-Ig
-#   3_187000001  6_91000001   9_37000001   12_122000001 
-
-# Ig
-# 22_22000001 
-# [9] 22_23000001 
-# [1] 2_89000001
-# 14_106000001 
-# 14_107000001 
-
-# ighst = 106304735-100000 # 14
-# ighend = 107283226+100000 # 14
-# iglst = 22385390-100000 # 22
-# iglend = 23263607+100000 # 22
-# igkst = 89160078-100000 # 2
-# igkend = 90274237+100000 # 2
-# cs_start = 106053274-100000 #14
-# cs_end = 106322322+100000 #14

@@ -1,10 +1,22 @@
-## Feb 2020
+############################################################################################
+## File: get_hg19_properties_HEM.R
+## Project: lymphocyte_somatic_mutation
+## Description: Extract genomic feature value per 10Kb
+##
+## Date: April 2021
+## Author: Heather Machado
+##
+## Adapted from scripts by Nicola Roberts, for analyses in:
+## Y. Li, N. D. Roberts, J. A. Wala, O. Shapira, S. E. Schumacher, K. Kumar, E. Khurana, S. Waszak, J. O. Korbel, J. E. Haber, M. Imielinski, J. Weischenfeldt, R. Beroukhim, P. J. Campbell, Patterns of somatic structural variation in human cancer genomes. Nature. 578, 112–121 (2020).
+############################################################################################
+
+
 ## Fetching hg19 genomic properties per window
 
 ### Referencing lustre mounted locally: /Users/hm8/volumes/hm8_network
 ### Lustre dir: /lustre/scratch116/casm/cgp/users/hm8/lymphocyteWGS/mutsig_byregion/regression_analysis
-
 #df1 = read.table("int_files/windows1kb_S9attribute_S9exp_chr14.txt", header=TRUE, stringsAsFactors = F)
+
 #location="local"
 library(GenomicFeatures)
 library(stringr)

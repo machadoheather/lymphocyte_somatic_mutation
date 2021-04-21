@@ -1,187 +1,229 @@
-### Identifying RAG mediated deletions
-# testing if we can just use the heptamer
+############################################################################################
+## File: analyze_RAGmotif_heptamer_July2020_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: RAG motif analysis
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
 
-### July, 2020
-#library(tidyverse)
+
+### Identifying RAG mediated deletions
+
 library(stringr)
 library(magrittr)
 library(rtracklayer)
 library(BSgenome.Hsapiens.1000genomes.hs37d5)
-#library(dplyr)
 library(cowplot)
 library(dplyr)
 
-setwd("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/RAGmotifs")
 
-# 
-# ## Reading in filtered data
-# myfiltered = read.table("../brassfiltered_all_July2019.txt", header=T, stringsAsFactors = F, sep="\t")
-# # 1142 SVs (including some un-curated ones)
-# # mydeletions = myfiltered[myfiltered$svclass=="deletion",]
-# # 895 deletions
-# 
-# 
-# ## Creating a control set of sites
-# # Add a random offset of between 200-2000bp 
-# # Going upstream for breakpoint 1 and downstream for breakpoint2 so can still do internal/external RSS motif analysis
-# mycontrol = myfiltered
-# offset1 = sample(c(-2000:-200), size=nrow(mycontrol), replace = T)
-# offset2 = sample(c(200:2000), size=nrow(mycontrol), replace = T)
-# mycontrol$start1 = myfiltered$start1 + offset1
-# mycontrol$end1 = myfiltered$end1 + offset1
-# mycontrol$start2 = myfiltered$start2 + offset2
-# mycontrol$end2 = myfiltered$end2 + offset2
-# myfiltered = mycontrol
-# 
-# 
-# ## Identify SVs found in multiple colonies (exact breakpoints)
-# # This is important for MEME analysis (for FIMO, include all)
-# myfiltered$ID = paste(myfiltered$chr1, myfiltered$start1, myfiltered$chr2, myfiltered$start2, myfiltered$svclass, sep="_")
-# myfiltered_nodup = myfiltered[!(duplicated(myfiltered$ID)), ]
-# #myfiltered = myfiltered_nodup
-# 
-# 
-# ## Fetching the flanking sequences
-# mygranges1 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr1", start.field="start1", end.field="end1", strand.field="strand1", keep.extra.columns=TRUE)
-# mygranges2 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr2", start.field="start2", end.field="end2", strand.field="strand2", keep.extra.columns=TRUE)
-# 
-# # _c. Get breakpoint flanking sequence ------------------------------------
-# # __i. Get 50bp offsets ---------------------------------------------------
-# # Make Grange around each breakpoint with flank 50bp
-# brkpt.1.ext.gr <- promoters(mygranges1, upstream = 50, downstream = 0)
-# brkpt.2.ext.gr <- promoters(mygranges2, upstream = 0, downstream = 50)
-# brkpt.1.int.gr <- promoters(mygranges1, upstream = 0, downstream = 50)
-# brkpt.2.int.gr <- promoters(mygranges2, upstream = 50, downstream = 0)
-# 
-# # __ii. Get Sequence ------------------------------------------------------
-# # Make list of sequences and fasta style name
-# brkpt.1.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.ext.gr, as.character = T))
-# names(brkpt.1.ext.gr.seq) <- paste0(">bp1_ext_", myfiltered$id.name, "_", myfiltered$sample)
-# 
-# brkpt.2.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.ext.gr, as.character = T))
-# names(brkpt.2.ext.gr.seq) <- paste0(">bp2_ext_", myfiltered$id.name, "_", myfiltered$sample)
-# 
-# brkpt.1.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.int.gr, as.character = T))
-# names(brkpt.1.int.gr.seq) <- paste0(">bp1_int_", myfiltered$id.name, "_", myfiltered$sample)
-# 
-# brkpt.2.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.int.gr, as.character = T))
-# names(brkpt.2.int.gr.seq) <- paste0(">bp2_int_", myfiltered$id.name, "_", myfiltered$sample)
-# 
-# # Add fasta name to original file bp1 & bp2
-# myfiltered$bp1_ext_uniID <- names(brkpt.1.ext.gr.seq)
-# myfiltered$bp2_ext_uniID <- names(brkpt.2.ext.gr.seq)
-# myfiltered$bp1_int_uniID <- names(brkpt.1.int.gr.seq)
-# myfiltered$bp2_int_uniID <- names(brkpt.2.int.gr.seq)
-# 
-# ## Annotate VDJ regions in original SV file
-# ighst = 106304735 # 14
-# ighend = 107283226 # 14
-# iglst = 22385390 # 22
-# iglend = 23263607 # 22
-# tcrhst = 22090055 # 14 TRA
-# tcrhend = 23014042 # 14
-# tcrlst = 142000819 # 7  TRB
-# tcrlend = 142510972 # 7
-# 
-# igkst = 89160078 # 2
-# igkend = 90274237 # 2
-# tcrgst = 38292979 #7
-# tcrgend = 38407656 #7
-# tcrdst = 22907537 #14   ## inside the TRA coordinates, so will just be labelled "TRA"
-# tcrdend = 22938606 #14
-# 
-# # class switching genes
-# # 14      106053274       106054731       IGHA2
-# # 14      106066403       106068064       IGHE
-# # 14      106090813       106092402       IGHG4
-# # 14      106109540       106111126       IGHG2
-# # 14      106173505       106175001       IGHA1
-# # 14      106207810       106209407       IGHG1
-# # 14      106232251       106237742       IGHG3
-# # 14      106304737       106312010       IGHD
-# # 14      106318298       106322322       IGHM
-# cs_start = 106053274
-# cs_end = 106322322
-# 
-# VDJlocus = vector()
-# for (i in 1:nrow(myfiltered)){
-#   X = myfiltered[i,]
-#   length(X)
-#   if ( (X$chr1 == 14 & X$start1 > ighst-1000 & X$start1 < ighend+1000) | (X$chr2 == 14 & X$end2 > ighst-1000 & X$end2 < ighend+1000 ) ) {VDJlocus[i] = "igh"} else
-#     if ( (X$chr1 == 22 & X$start1 > iglst-1000 & X$start1 < iglend+1000) |  (X$chr2 == 22 & X$end2 > iglst-1000 & X$end2 < iglend+1000) ) {VDJlocus[i] = "igl"} else
-#       if ( (X$chr1 == 14 & X$start1 > tcrhst-1000 & X$start1 < tcrhend+1000) | (X$chr2 == 14 & X$end2 > tcrhst-1000 & X$end2 < tcrhend+1000) )  {VDJlocus[i] = "tra"} else
-#         if ( (X$chr1 == 7 & X$start1 > tcrlst-1000 & X$start1 < tcrlend+1000) | (X$chr2 == 7 & X$end2 > tcrlst-1000 & X$end2 < tcrlend+1000) ){VDJlocus[i] = "trb"} else 
-#           if  ( (X$chr1 == 2 & X$start1 > igkst-1000 & X$start1 < igkend+1000) | (X$chr2 == 2 & X$end2 > igkst-1000 & X$end2 < igkend+1000) ) {VDJlocus[i] = "igk"} else 
-#             if ( (X$chr1 == 7 & X$start1 > tcrgst-1000 & X$start1 < tcrgend+1000) | (X$chr2 == 7 & X$end2 > tcrgst-1000 & X$end2 < tcrgend+1000) ) {VDJlocus[i] = "trg"} else 
-#               if ( (X$chr1 == 14 & X$start1 > tcrdst-1000 & X$start1 < tcrdend+1000) | (X$chr2 == 14 & X$end2 > tcrdst-1000 & X$end2 < tcrdend+1000) ) {VDJlocus[i] = "trd"} else 
-#                 if ( (X$chr1 == 14 & X$start1 > cs_start-1000 & X$start1 < cs_end+1000) | (X$chr2 == 14 & X$end2 > cs_start-1000 & X$end2 < cs_end+1000) ) {VDJlocus[i] = "classS"} else 
-#                 {VDJlocus[i] = FALSE}
-# }
-# myfiltered$VDJlocus = VDJlocus
-# 
-# write.table(myfiltered, file="motifnames_brassfiltered_all_July2019.txt", quote=FALSE, col.names = T, row.names = F, sep="\t")
-# #write.table(myfiltered, file="motifnames_brassfiltered_all_controls_July2019.txt", quote=FALSE, col.names = T, row.names = F, sep="\t")
-# #save(brass.del.assem.df, brass.del.assem.df, file="brass.del.assem.df.Rdata")
-# 
-# 
-# 
-# ## Write out fasta for MEME of FIMO
-# # only write unique lines
-# meme.fasta <- c(rbind(c(names(brkpt.1.ext.gr.seq), names(brkpt.2.ext.gr.seq),names(brkpt.1.int.gr.seq), names(brkpt.2.int.gr.seq) ), c(unlist(brkpt.1.ext.gr.seq), unlist(brkpt.2.ext.gr.seq), unlist(brkpt.1.int.gr.seq), unlist(brkpt.2.int.gr.seq) )))
-# writeLines(meme.fasta,  "20190712_RAGfullmotif_MEME_filtered_updown_split.fasta")
-# #writeLines(meme.fasta,  "20190712_RAGfullmotif_MEME_filtered_updown_split_controls.fasta")
-# #writeLines(meme.fasta,  "20190712_RAGfullmotif_MEME_filtered_updown_split_nocolonydup.fasta")
-# 
-# 
-# ## MEME running intructions from Dan:
-# # # Submit o MEME with max motif set to 15 same as Elli paper
-# # # Download HTML, txt and XML results
-# # # /Users/dl8/Documents/002_ALL_Project/002_Analysis/000_MEME/000_MEME_5.0.11532383863623-1327004615
-# # # I haven't built a full parser for the results files so I download all significant motif FASTAs results files    
-# # # e. MEME results ---------------------------------------------------------
-# # # _a. Count matches for top motif  ----------------------------------------
-# # # Read in FASTA of motif 1 matches
-# # MEME_motif01 <- readLines("000_MEME/000_MEME_5.0.11532383863623-1327004615/motif_1_fasta.txt")
-# # 
-# # # Match uniq ID back to input file and add header which includes match poistion and whether it is reverse complement
-# # 
-# # brass.del.assem.df$motif1.bp1 <-
-# #   unlist(lapply(brass.del.assem.df$bp1_uniID, function(x) {
-# #     ifelse(length(grep(x, MEME_motif01, value = T)) == 0, NA, grep(x, MEME_motif01, value = T) )
-# #   }))
-# # 
-# # brass.del.assem.df$motif1.bp2 <-
-# #   unlist(lapply(brass.del.assem.df$bp2_uniID, function(x) {
-# #     ifelse(length(grep(x, MEME_motif01, value = T)) == 0, NA, grep(x, MEME_motif01, value = T))
-# #   }))
-# 
-# 
-# ## FIMO options (website)
-# # OLD:  fimo --oc . --verbosity 1 --thresh 1.0E-4 RAG-motif_hepnon_combined.meme.txt 20190128_RAGfullmotif_MEME_filtered_updown_split.fasta
-# # fimo --oc . --verbosity 1 --thresh 1.0E-4 RAG-motif_hepnon_combined.meme.txt 20190712_RAGfullmotif_MEME_filtered_updown_split.fasta
-# 
-# ## MEME options (website)
-# # Options:
-# # - Zero or one occurence per sequence
-# # - 15 motifs
-# # - Classic mode
-# # - width: 6-50
-# # - sites per motif: 2-600 (don't know what this means)
-# # file: 20190712_RAGfullmotif_MEME_filtered_updown_split.fasta
-# 
+## Reading in filtered data
+myfiltered = read.table("../data/brassfiltered_all_July2019.txt", header=T, stringsAsFactors = F, sep="\t")
+# 1142 SVs (including some un-curated ones)
+# mydeletions = myfiltered[myfiltered$svclass=="deletion",]
+# 895 deletions
+
+## Identify SVs found in multiple colonies (exact breakpoints)
+# This is important for MEME analysis (for FIMO, include all)
+myfiltered$ID = paste(myfiltered$chr1, myfiltered$start1, myfiltered$chr2, myfiltered$start2, myfiltered$svclass, sep="_")
+
+## Fetching the flanking sequences
+mygranges1 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr1", start.field="start1", end.field="end1", strand.field="strand1", keep.extra.columns=TRUE)
+mygranges2 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr2", start.field="start2", end.field="end2", strand.field="strand2", keep.extra.columns=TRUE)
+
+# _c. Get breakpoint flanking sequence ------------------------------------
+# __i. Get 50bp offsets ---------------------------------------------------
+# Make Grange around each breakpoint with flank 50bp
+brkpt.1.ext.gr <- promoters(mygranges1, upstream = 50, downstream = 0)
+brkpt.2.ext.gr <- promoters(mygranges2, upstream = 0, downstream = 50)
+brkpt.1.int.gr <- promoters(mygranges1, upstream = 0, downstream = 50)
+brkpt.2.int.gr <- promoters(mygranges2, upstream = 50, downstream = 0)
+
+# __ii. Get Sequence ------------------------------------------------------
+# Make list of sequences and fasta style name
+brkpt.1.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.ext.gr, as.character = T))
+names(brkpt.1.ext.gr.seq) <- paste0(">bp1_ext_", myfiltered$id.name, "_", myfiltered$sample)
+
+brkpt.2.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.ext.gr, as.character = T))
+names(brkpt.2.ext.gr.seq) <- paste0(">bp2_ext_", myfiltered$id.name, "_", myfiltered$sample)
+
+brkpt.1.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.int.gr, as.character = T))
+names(brkpt.1.int.gr.seq) <- paste0(">bp1_int_", myfiltered$id.name, "_", myfiltered$sample)
+
+brkpt.2.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.int.gr, as.character = T))
+names(brkpt.2.int.gr.seq) <- paste0(">bp2_int_", myfiltered$id.name, "_", myfiltered$sample)
+
+# Add fasta name to original file bp1 & bp2
+myfiltered$bp1_ext_uniID <- names(brkpt.1.ext.gr.seq)
+myfiltered$bp2_ext_uniID <- names(brkpt.2.ext.gr.seq)
+myfiltered$bp1_int_uniID <- names(brkpt.1.int.gr.seq)
+myfiltered$bp2_int_uniID <- names(brkpt.2.int.gr.seq)
+
+## Annotate VDJ regions in original SV file
+ighst = 106304735 # 14
+ighend = 107283226 # 14
+iglst = 22385390 # 22
+iglend = 23263607 # 22
+tcrhst = 22090055 # 14 TRA
+tcrhend = 23014042 # 14
+tcrlst = 142000819 # 7  TRB
+tcrlend = 142510972 # 7
+
+igkst = 89160078 # 2
+igkend = 90274237 # 2
+tcrgst = 38292979 #7
+tcrgend = 38407656 #7
+tcrdst = 22907537 #14   ## inside the TRA coordinates, so will just be labelled "TRA"
+tcrdend = 22938606 #14
+
+# class switching genes
+cs_start = 106053274
+cs_end = 106322322
+
+VDJlocus = vector()
+for (i in 1:nrow(myfiltered)){
+  X = myfiltered[i,]
+  length(X)
+  if ( (X$chr1 == 14 & X$start1 > ighst-1000 & X$start1 < ighend+1000) | (X$chr2 == 14 & X$end2 > ighst-1000 & X$end2 < ighend+1000 ) ) {VDJlocus[i] = "igh"} else
+    if ( (X$chr1 == 22 & X$start1 > iglst-1000 & X$start1 < iglend+1000) |  (X$chr2 == 22 & X$end2 > iglst-1000 & X$end2 < iglend+1000) ) {VDJlocus[i] = "igl"} else
+      if ( (X$chr1 == 14 & X$start1 > tcrhst-1000 & X$start1 < tcrhend+1000) | (X$chr2 == 14 & X$end2 > tcrhst-1000 & X$end2 < tcrhend+1000) )  {VDJlocus[i] = "tra"} else
+        if ( (X$chr1 == 7 & X$start1 > tcrlst-1000 & X$start1 < tcrlend+1000) | (X$chr2 == 7 & X$end2 > tcrlst-1000 & X$end2 < tcrlend+1000) ){VDJlocus[i] = "trb"} else
+          if  ( (X$chr1 == 2 & X$start1 > igkst-1000 & X$start1 < igkend+1000) | (X$chr2 == 2 & X$end2 > igkst-1000 & X$end2 < igkend+1000) ) {VDJlocus[i] = "igk"} else
+            if ( (X$chr1 == 7 & X$start1 > tcrgst-1000 & X$start1 < tcrgend+1000) | (X$chr2 == 7 & X$end2 > tcrgst-1000 & X$end2 < tcrgend+1000) ) {VDJlocus[i] = "trg"} else
+              if ( (X$chr1 == 14 & X$start1 > tcrdst-1000 & X$start1 < tcrdend+1000) | (X$chr2 == 14 & X$end2 > tcrdst-1000 & X$end2 < tcrdend+1000) ) {VDJlocus[i] = "trd"} else
+                if ( (X$chr1 == 14 & X$start1 > cs_start-1000 & X$start1 < cs_end+1000) | (X$chr2 == 14 & X$end2 > cs_start-1000 & X$end2 < cs_end+1000) ) {VDJlocus[i] = "classS"} else
+                {VDJlocus[i] = FALSE}
+}
+myfiltered$VDJlocus = VDJlocus
+write.table(myfiltered, file="motifnames_brassfiltered_all_July2019.txt", quote=FALSE, col.names = T, row.names = F, sep="\t")
+
+## Write out fasta for MEME of FIMO
+# only write unique lines
+meme.fasta <- c(rbind(c(names(brkpt.1.ext.gr.seq), names(brkpt.2.ext.gr.seq),names(brkpt.1.int.gr.seq), names(brkpt.2.int.gr.seq) ), c(unlist(brkpt.1.ext.gr.seq), unlist(brkpt.2.ext.gr.seq), unlist(brkpt.1.int.gr.seq), unlist(brkpt.2.int.gr.seq) )))
+writeLines(meme.fasta,  "20190712_RAGfullmotif_MEME_filtered_updown_split.fasta")
+
+
+
+
+###########################################################
+## Creating a control set of sites
+# Add a random offset of between 200-2000bp
+# Going upstream for breakpoint 1 and downstream for breakpoint2 so can still do internal/external RSS motif analysis
+mycontrol = myfiltered
+offset1 = sample(c(-2000:-200), size=nrow(mycontrol), replace = T)
+offset2 = sample(c(200:2000), size=nrow(mycontrol), replace = T)
+mycontrol$start1 = myfiltered$start1 + offset1
+mycontrol$end1 = myfiltered$end1 + offset1
+mycontrol$start2 = myfiltered$start2 + offset2
+mycontrol$end2 = myfiltered$end2 + offset2
+myfiltered = mycontrol
+
+## Identify SVs found in multiple colonies (exact breakpoints)
+# This is important for MEME analysis (for FIMO, include all)
+myfiltered$ID = paste(myfiltered$chr1, myfiltered$start1, myfiltered$chr2, myfiltered$start2, myfiltered$svclass, sep="_")
+#myfiltered_nodup = myfiltered[!(duplicated(myfiltered$ID)), ]
+
+## Fetching the flanking sequences
+mygranges1 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr1", start.field="start1", end.field="end1", strand.field="strand1", keep.extra.columns=TRUE)
+mygranges2 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr2", start.field="start2", end.field="end2", strand.field="strand2", keep.extra.columns=TRUE)
+
+# _c. Get breakpoint flanking sequence ------------------------------------
+# __i. Get 50bp offsets ---------------------------------------------------
+# Make Grange around each breakpoint with flank 50bp
+brkpt.1.ext.gr <- promoters(mygranges1, upstream = 50, downstream = 0)
+brkpt.2.ext.gr <- promoters(mygranges2, upstream = 0, downstream = 50)
+brkpt.1.int.gr <- promoters(mygranges1, upstream = 0, downstream = 50)
+brkpt.2.int.gr <- promoters(mygranges2, upstream = 50, downstream = 0)
+
+# __ii. Get Sequence ------------------------------------------------------
+# Make list of sequences and fasta style name
+brkpt.1.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.ext.gr, as.character = T))
+names(brkpt.1.ext.gr.seq) <- paste0(">bp1_ext_", myfiltered$id.name, "_", myfiltered$sample)
+
+brkpt.2.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.ext.gr, as.character = T))
+names(brkpt.2.ext.gr.seq) <- paste0(">bp2_ext_", myfiltered$id.name, "_", myfiltered$sample)
+
+brkpt.1.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.int.gr, as.character = T))
+names(brkpt.1.int.gr.seq) <- paste0(">bp1_int_", myfiltered$id.name, "_", myfiltered$sample)
+
+brkpt.2.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.int.gr, as.character = T))
+names(brkpt.2.int.gr.seq) <- paste0(">bp2_int_", myfiltered$id.name, "_", myfiltered$sample)
+
+# Add fasta name to original file bp1 & bp2
+myfiltered$bp1_ext_uniID <- names(brkpt.1.ext.gr.seq)
+myfiltered$bp2_ext_uniID <- names(brkpt.2.ext.gr.seq)
+myfiltered$bp1_int_uniID <- names(brkpt.1.int.gr.seq)
+myfiltered$bp2_int_uniID <- names(brkpt.2.int.gr.seq)
+
+## Annotate VDJ regions in original SV file
+ighst = 106304735 # 14
+ighend = 107283226 # 14
+iglst = 22385390 # 22
+iglend = 23263607 # 22
+tcrhst = 22090055 # 14 TRA
+tcrhend = 23014042 # 14
+tcrlst = 142000819 # 7  TRB
+tcrlend = 142510972 # 7
+
+igkst = 89160078 # 2
+igkend = 90274237 # 2
+tcrgst = 38292979 #7
+tcrgend = 38407656 #7
+tcrdst = 22907537 #14   ## inside the TRA coordinates, so will just be labelled "TRA"
+tcrdend = 22938606 #14
+
+# class switching genes
+cs_start = 106053274
+cs_end = 106322322
+
+VDJlocus = vector()
+for (i in 1:nrow(myfiltered)){
+  X = myfiltered[i,]
+  length(X)
+  if ( (X$chr1 == 14 & X$start1 > ighst-1000 & X$start1 < ighend+1000) | (X$chr2 == 14 & X$end2 > ighst-1000 & X$end2 < ighend+1000 ) ) {VDJlocus[i] = "igh"} else
+    if ( (X$chr1 == 22 & X$start1 > iglst-1000 & X$start1 < iglend+1000) |  (X$chr2 == 22 & X$end2 > iglst-1000 & X$end2 < iglend+1000) ) {VDJlocus[i] = "igl"} else
+      if ( (X$chr1 == 14 & X$start1 > tcrhst-1000 & X$start1 < tcrhend+1000) | (X$chr2 == 14 & X$end2 > tcrhst-1000 & X$end2 < tcrhend+1000) )  {VDJlocus[i] = "tra"} else
+        if ( (X$chr1 == 7 & X$start1 > tcrlst-1000 & X$start1 < tcrlend+1000) | (X$chr2 == 7 & X$end2 > tcrlst-1000 & X$end2 < tcrlend+1000) ){VDJlocus[i] = "trb"} else
+          if  ( (X$chr1 == 2 & X$start1 > igkst-1000 & X$start1 < igkend+1000) | (X$chr2 == 2 & X$end2 > igkst-1000 & X$end2 < igkend+1000) ) {VDJlocus[i] = "igk"} else
+            if ( (X$chr1 == 7 & X$start1 > tcrgst-1000 & X$start1 < tcrgend+1000) | (X$chr2 == 7 & X$end2 > tcrgst-1000 & X$end2 < tcrgend+1000) ) {VDJlocus[i] = "trg"} else
+              if ( (X$chr1 == 14 & X$start1 > tcrdst-1000 & X$start1 < tcrdend+1000) | (X$chr2 == 14 & X$end2 > tcrdst-1000 & X$end2 < tcrdend+1000) ) {VDJlocus[i] = "trd"} else
+                if ( (X$chr1 == 14 & X$start1 > cs_start-1000 & X$start1 < cs_end+1000) | (X$chr2 == 14 & X$end2 > cs_start-1000 & X$end2 < cs_end+1000) ) {VDJlocus[i] = "classS"} else
+                {VDJlocus[i] = FALSE}
+}
+myfiltered$VDJlocus = VDJlocus
+#write.table(myfiltered, file="motifnames_brassfiltered_all_controls_July2019.txt", quote=FALSE, col.names = T, row.names = F, sep="\t")
+
+meme.fasta <- c(rbind(c(names(brkpt.1.ext.gr.seq), names(brkpt.2.ext.gr.seq),names(brkpt.1.int.gr.seq), names(brkpt.2.int.gr.seq) ), c(unlist(brkpt.1.ext.gr.seq), unlist(brkpt.2.ext.gr.seq), unlist(brkpt.1.int.gr.seq), unlist(brkpt.2.int.gr.seq) )))
+#writeLines(meme.fasta,  "20190712_RAGfullmotif_MEME_filtered_updown_split_controls.fasta")
+
+
+
+
+###########################################################################################################################
+############################# Run FIMO to detect RSS motifs in the sequences from the fasta's just written
+## FIMO options (website)
+# fimo --oc . --verbosity 1 --thresh 1.0E-4 RAG-motif_hepnon_combined.meme.txt 20190712_RAGfullmotif_MEME_filtered_updown_split.fasta
+###########################################################################################################################
+
+
 
 
 #########################################
 #####   Check for RAG using FIMO
 # Using the motifs file: RAG-motif_hepnon_combined.meme.txt
-myfiltered = read.table(file="motifnames_brassfiltered_all_July2019.txt", header = T, stringsAsFactors = F, sep="\t")
-fimoALL = read.table("fimo_20200710_RAGheptamer_fullmotif_MEME_filtered_updown_split.txt", header=TRUE, stringsAsFactors = F, sep="\t")
+myfiltered = read.table(file="../data/motifnames_brassfiltered_all_July2019.txt", header = T, stringsAsFactors = F, sep="\t")
+
+## read in FIMO results
+fimoALL = read.table("../data/fimo_20200710_RAGheptamer_fullmotif_MEME_filtered_updown_split.txt", header=TRUE, stringsAsFactors = F, sep="\t")
 #pvalue = 1e-5
 pvalue = 1e-4
 fimo = fimoALL[fimoALL$p.value<pvalue,]
 fimo_names = unlist(lapply(fimo$sequence_name, FUN=function(X) paste(">", X, sep="")))
-myfilteredcont = read.table(file="motifnames_brassfiltered_all_controls_July2019.txt", header = T, stringsAsFactors = F, sep="\t")
-fimoALLcont = read.table("fimo_20200710_control_RAGheptamer_fullmotif_MEME_filtered_updown_split.txt", header=TRUE, stringsAsFactors = F, sep="\t")
+
+## read in FIMO results (control)
+myfilteredcont = read.table(file="../data/motifnames_brassfiltered_all_controls_July2019.txt", header = T, stringsAsFactors = F, sep="\t")
+fimoALLcont = read.table("../data/fimo_20200710_control_RAGheptamer_fullmotif_MEME_filtered_updown_split.txt", header=TRUE, stringsAsFactors = F, sep="\t")
 fimocont = fimoALLcont[fimoALLcont$p.value<pvalue,]
 fimo_names_cont = unlist(lapply(fimocont$sequence_name, FUN=function(X) paste(">", X, sep="")))
 
@@ -271,14 +313,8 @@ myfiltered$raghit_extonly_cont =  !myfiltered$raghit_int_cont & myfiltered$raghi
 
 
 ## Writing results table
-write.table(myfiltered, file="results_p10e4_obs_control_fimo_RAGheptamer_fullmotif_20200710_brassfiltered_all_July2020.txt", quote=F, col.names = T, row.names = F, sep="\t")
+#write.table(myfiltered, file="results_p10e4_obs_control_fimo_RAGheptamer_fullmotif_20200710_brassfiltered_all_July2020.txt", quote=F, col.names = T, row.names = F, sep="\t")
 
-
-#########################################
-##### RE-START HERE
-#########################################
-#### RAG for VDJ and non-VDJ, by SV class
-myfiltered = read.table(file="/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/RAGmotifs/results_p10e4_obs_control_fimo_RAGheptamer_fullmotif_20200710_brassfiltered_all_July2020.txt", header = T, sep="\t") # 1142
 
 ### for internal VDJ hits (likely all TRUE positives), here is the distribution of hepatmers
 # CACAGTG CACTGTG CACATTG CACAGCC CACAGTA CACAGTC CACAATG CACAGCG CACTCTG 
@@ -296,61 +332,34 @@ myfiltered = read.table(file="/Users/hm8/sanger/lymphocyteExpansionSequenceAnaly
 
 ### For the MISSED VDJ, are there motifs? Use only T cells (b cells have CSR)
 # Read in m3 table and use to include only colonies that made it into the main analysis
-m3 = read.table("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/colonyinfo_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg.txt", sep="\t", header=T) # 734
+m3 = read.table("../data/colonyinfo_AX001_KX001_KX002_KX003_TX001_TX002_CB001.txt", sep="\t", header=T) # 734
 unique(myfiltered$sample)[!(unique(myfiltered$sample) %in% m3$colony)]
 # [1] B11_G2            BMH57             PD40521c          PD40521d          PD40521e         
 # [6] PD40521g          PD40521te,PDv37is PD40667vr         PD43974ay         PD43974az        
 # [11] PD43974bf         PD43974bn         PD43974cp         T1_A3 
 # Remove the 14 colonies in SV/RAG analysis NOT included in main analysis (filtered out)
-myfiltered2 = subset(myfiltered, colony %in% subset(m3, Cell.type2 %in% c("HSC","B Memory","T Memory","B Naive","T Naive"))$colony)   #  1118
+myfiltered2 = subset(myfiltered, colony %in% subset(m3, Cell.type2 %in% c("HSC","Memory B","Memory T","Naive B","Naive T"))$colony)   #  1118
 myfiltered2$IDsample = paste(myfiltered2$chr1, myfiltered2$start1, myfiltered2$start2, myfiltered2$sample, sep="_")
-#myfiltered_nodup = myfiltered[!(duplicated(myfiltered$ID)),]
-#myfiltered2 = merge(myfiltered, m3, by.x="sample", by.y="colony") 
-#write.table(myfiltered2, file="/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/RAGmotifs/results_p10e4_obs_control_fimo_RAGheptamer_fullmotif_20200710_brassfiltered_nodup_analyzed_info_July2020.txt", col.names = T, row.names = F, quote=F, sep="\t") # 1142
-#myfiltered_type = merge(myfiltered_nodup, subset(m3, Cell.type2 %in% c("HSC","B Memory","T Memory","B Naive","T Naive","Treg"))[,c("colony","Cell.type2")], by="colony")   # 1074  116
-#falseneg = subset(myfiltered_type, raghit==FALSE & VDJlocusTF==TRUE & svclass == "deletion" & Cell.type2 %in% c("T Memory","T Naive") )  ## 16
-# myseqs = read.table(file="20190712_RAGfullmotif_MEME_filtered_updown_split.fasta", header = F, stringsAsFactors = F, sep="\t")
-# myseqs2 = matrix(myseqs[,1], ncol=2, byrow=T)
-# 
-# falsenegID = c(as.character(falseneg$bp1_int_uniID), as.character(falseneg$bp2_int_uniID))
-# falsenegseq = myseqs2[myseqs2[,1] %in% falsenegID,]
-# grep(falsenegseq[,2], pattern="CACAGTG") # 1  2  3  4  7 11 13 15
-# grep(falsenegseq[,2], pattern="CACTGTG") # 24 27
-# grep(falsenegseq[,2], pattern="CACATTG") # 
-# grep(falsenegseq[,2], pattern="CTCTCCA") # 
 
 
-# remove False Positives discovered by manual curation (but does not remove IBD)
-brass_ascat_curated = read.csv("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_ascat_curated.csv")
-brass_ascat_curated$IDsample = paste(brass_ascat_curated$chr1, brass_ascat_curated$start1, brass_ascat_curated$start2, brass_ascat_curated$sample, sep="_")
-myfilteredTP = subset(myfiltered2, !(IDsample %in% brass_ascat_curated$IDsample[brass_ascat_curated$Correct==FALSE]) )  #  996
-myfilteredTPinfo = merge(myfilteredTP, m3[,c("colony","Cell.type2")], by="colony", all.y=TRUE)
-
-# What percent of lymphocytes have an off-target RAG?
-rag_by_colony = subset(myfilteredTPinfo, VDJlocusTF == FALSE | is.na(VDJlocusTF)) %>% 
-  group_by(colony) %>% 
-    summarise(raghit.T = sum(raghit==TRUE, na.rm=TRUE),
-              raghit.F = sum(raghit==FALSE, na.rm=TRUE),
-              n = n())
-mean(rag_by_colony$raghit.T > 0)
-# 0.09705882
 
 
-## including only the TP and non-dup (unique mutational events)
-brassfilteredTPnodupNonASCAT = read.table(file="../brassfilteredTPnodupNonASCAT_July2020.txt", header=T, sep="\t", stringsAsFactors = F)
+
+
+######### including only the TP and non-dup (unique mutational events)
+brassfilteredTPnodupNonASCAT = read.table(file="../data/brassfilteredTPnodupNonASCAT_July2020.txt", header=T, sep="\t", stringsAsFactors = F)
 ragfinal = merge(myfiltered2, brassfilteredTPnodupNonASCAT[,c("IDsample", "Correct","Comment")], by="IDsample")  #  986 out of 1019 (33 missing - colonies without any SVs?- CHECK- only need to include those for SOME measurements)
 ## already checked- these are just lymphocytes
 
-sum(brassfilteredTPnodupNonASCAT$sample %in% subset(m3, Cell.type2 %in% c("HSC","B Memory","T Memory","B Naive","T Naive"))$colony )  # 1019- no, these are only real SVs, so none should be missing.
-tmpallSV = subset(brassfilteredTPnodupNonASCAT, sample %in% subset(m3, Cell.type2 %in% c("HSC","B Memory","T Memory","B Naive","T Naive"))$colony)
+sum(brassfilteredTPnodupNonASCAT$sample %in% subset(m3, Cell.type2 %in% c("HSC","Memory B","Memory T","Naive B","Naive T"))$colony )  # 1019- no, these are only real SVs, so none should be missing.
+tmpallSV = subset(brassfilteredTPnodupNonASCAT, sample %in% subset(m3, Cell.type2 %in% c("HSC","Memory B","Memory T","Naive B","Naive T"))$colony)
 myfiltered2$ID2 = paste(myfiltered2$chr1, myfiltered2$start1, myfiltered2$start2, sep="_")
 sum(tmpallSV$ID %in% myfiltered2$ID2)
 # perhaps some were missing in the brass file, but that existed in the curated one (TRUE! Peter added some variants...)
 # Consider re-running analyses using the manually curated SV list of 1019
 
-
 ## read in the background rate
-mybackground = read.table("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/genomic_controls/RAG/results_RAGmotif_genomiccontrol.txt", header=T, stringsAsFactors = F)
+mybackground = read.table("../data/results_RAGmotif_genomiccontrol.txt", header=T, stringsAsFactors = F)
 
 
 ## perform bootstrap resampling (for VDJ, non-VDJ, non-VDJ B and non-VDJ T)
@@ -373,8 +382,8 @@ bootstrap_summary = function(x, n){
 }
 bootstrap_VDJ = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==TRUE), n=1000)
 bootstrap_nonVDJ = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==FALSE), n=1000)
-bootstrap_nonVDJ_B = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==FALSE & sample %in% subset(m3, Cell.type2 %in% c("B Memory","B Naive"))$colony ), n=1000)  # 37 SVs
-bootstrap_nonVDJ_T = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==FALSE & sample %in% subset(m3, Cell.type2 %in% c("T Memory","T Naive"))$colony ), n=1000) #113 SVs
+bootstrap_nonVDJ_B = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==FALSE & sample %in% subset(m3, Cell.type2 %in% c("Memory B","Naive B"))$colony ), n=1000)  # 37 SVs
+bootstrap_nonVDJ_T = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==FALSE & sample %in% subset(m3, Cell.type2 %in% c("Memory T","Naive T"))$colony ), n=1000) #113 SVs
 
 
 # Summary figures
@@ -524,10 +533,10 @@ gd <- subset(ragfinal, VDJlocusTF==FALSE)  %>%
             n = n(),
             n.nonraghit = n-n.raghit)
 # Cell.type2 m.raghit n.raghit     n
-#   1 B Memory      0.258        8    31
-# 2 B Naive       0.167        1     6
-# 3 T Memory      0.159        7    44
-# 4 T Naive       0.290       20    69
+#   1 Memory B      0.258        8    31
+# 2 Naive B       0.167        1     6
+# 3 Memory T      0.159        7    44
+# 4 Naive T       0.290       20    69
 chisq.test(matrix(c(8+7, 23+37,1+20,5+49), ncol=2)) # mem rag, mem non-rag, naive rag, naive non-rag
 # p=0.3391
 
@@ -673,10 +682,8 @@ ggsave("fimoRAGheptamer_fullmotif_control_obs_brassfiltered_VDJ_barplot_Jul2020.
 
 
 #### Proportion of SVs with RSS motif by cell subset- obs and control
-
-bootstrap_nonVDJ_B = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==FALSE & sample %in% subset(m3, Cell.type2 %in% c("B Memory","B Naive"))$colony ), n=1000)  # 37 SVs
-bootstrap_nonVDJ_T = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==FALSE & sample %in% subset(m3, Cell.type2 %in% c("T Memory","T Naive"))$colony ), n=1000) #113 SVs
-
+bootstrap_nonVDJ_B = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==FALSE & sample %in% subset(m3, Cell.type2 %in% c("Memory B","Naive B"))$colony ), n=1000)  # 37 SVs
+bootstrap_nonVDJ_T = bootstrap_summary(x=subset(ragfinal, VDJlocusTF==FALSE & sample %in% subset(m3, Cell.type2 %in% c("Memory T","Naive T"))$colony ), n=1000) #113 SVs
 
 gd_celltype <- myfiltered_type %>% 
   group_by(svclass2, VDJlocusTF,Cell.type2) %>% 
@@ -725,219 +732,21 @@ ggsave("fimoRAGheptamer_fullmotif_control_obs_allSV_celltype_VDJ_barplot_Jul2020
 
 
 
-# #### Proportion of RAG deletions with RSS internal to deletion 
-# myfiltered = ragfinal  ## using the 
-# 
-# gd_rag_intext <- myfiltered %>% 
-#   group_by(svclass2, VDJlocusTF, raghit) %>% 
-#   summarise(m.raghit_int = mean(raghit_intonly),
-#             m.raghit_ext = mean(raghit_extonly),
-#             m.raghit_intext = mean(raghit_intext),
-#             sd.raghit_int = sd(raghit_intonly),
-#             sd.raghit_ext = sd(raghit_extonly),
-#             sd.raghit_intext = sd(raghit_intext),
-#             n = n())
-# 
-# gd_rag_intext_total <- myfiltered %>% 
-#   group_by(VDJlocusTF, raghit) %>% 
-#   summarise(m.raghit_int = mean(raghit_intonly),
-#             m.raghit_ext = mean(raghit_extonly),
-#             m.raghit_intext = mean(raghit_intext),
-#             sd.raghit_int = sd(raghit_intonly),
-#             sd.raghit_ext = sd(raghit_extonly),
-#             sd.raghit_intext = sd(raghit_intext),
-#             n = n())
-# 
-# gd_rag_intext_cont <- myfiltered %>% 
-#   group_by(svclass2, VDJlocusTF, raghit_cont) %>% 
-#   summarise(m.raghit_int_cont = mean(raghit_intonly_cont),
-#             m.raghit_ext_cont = mean(raghit_extonly_cont),
-#             m.raghit_intext_cont = mean(raghit_intext_cont),
-#             sd.raghit_int_cont = sd(raghit_intonly_cont),
-#             sd.raghit_ext_cont = sd(raghit_extonly_cont),
-#             sd.raghit_intext_cont = sd(raghit_intext_cont),
-#             n = n())
-# 
-# gd_rag_intext_total_cont <- myfiltered %>% 
-#   group_by(VDJlocusTF, raghit_cont) %>% 
-#   summarise(m.raghit_int_cont = mean(raghit_intonly_cont),
-#             m.raghit_ext_cont = mean(raghit_extonly_cont),
-#             m.raghit_intext_cont = mean(raghit_intext_cont),
-#             sd.raghit_int_cont = sd(raghit_intonly_cont),
-#             sd.raghit_ext_cont = sd(raghit_extonly_cont),
-#             sd.raghit_intext_cont = sd(raghit_intext_cont),
-#             n = n())
-# 
-
-# ## proportion of RAG deletions with RSS motif internal only
-# g1= 
-#   ggplot(subset(gd_rag_intext, raghit==TRUE), aes(x = svclass2, y=m.raghit_int, group=VDJlocusTF, fill=VDJlocusTF) )+
-#   geom_bar(stat = "identity", position=position_dodge(), col="black", size=0.2)+
-#   geom_text(aes(y=0.03, label = n) ,  position=position_dodge(width=1), size=2) + 
-#   scale_fill_manual(name="",values=c("TRUE"="lightgrey", "FALSE"="darkgrey"), labels=c("TRUE"="VDJ region", "FALSE"="non-VDJ region"))+
-#   ylab("Only internal RSS motif (prop.)")+
-#   #geom_errorbar(aes(ymin=m.raghit_int-sd.raghit_int, ymax=m.raghit_int+sd.raghit_int), width=.2, position=position_dodge(1)) #+
-#   ylim(c(0,1))+
-#   xlab("SV class")+
-#   theme_light()+
-#   ggtitle("Observed")+
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-# #ggsave("fimoRAG_20190712_allSV_intRSSonly_barplot_ggplotJul2019.pdf", width=7,height=5)
-# g2= 
-# ggplot(subset(gd_rag_intext_cont, raghit_cont==TRUE), aes(x = svclass2, y=m.raghit_int_cont, group=VDJlocusTF, fill=VDJlocusTF) )+
-#   geom_bar(stat = "identity", position=position_dodge(), col="black", size=0.2)+
-#   geom_text(aes(y=0.03, label = n) ,  position=position_dodge(width=1), size=2) + 
-#   scale_fill_manual(name="",values=c("TRUE"="lightgrey", "FALSE"="darkgrey"), labels=c("TRUE"="VDJ region", "FALSE"="non-VDJ region"))+
-#   ylab("Only internal RSS motif (prop.)")+
-#   #geom_errorbar(aes(ymin=m.raghit_int-sd.raghit_int, ymax=m.raghit_int+sd.raghit_int), width=.2, position=position_dodge(1)) #+
-#   ylim(c(0,1))+
-#   xlab("SV class")+
-#   theme_light()+
-#   ggtitle("Control")+
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-# gArrange = grid.arrange(g1, g2, nrow = 1)
-# ggsave(gArrange, file="fimoRAG_obs_control_20190721_allSV_intRSSonly_barplot_ggplotJul2019.pdf", width=9,height=3.5)
-# #ggsave(gArrange, file="fimoRAG_obs_control_p10e05_20190721_allSV_intRSSonly_barplot_ggplotJul2019.pdf", width=9,height=3.5)
-# 
-# 
-# 
-# ## proportion of RAG deletions with RSS motif external only 
-# g1=
-#   ggplot(subset(gd_rag_intext, raghit==TRUE), aes(x = svclass2, y=m.raghit_ext, group=VDJlocusTF, fill=VDJlocusTF) )+
-#   geom_bar(stat = "identity", position=position_dodge(), col="black", size=0.2)+
-#   geom_text(aes(y=0.03, label = n) ,  position=position_dodge(width=1), size=2) + 
-#   scale_fill_manual(name="",values=c("TRUE"="lightgrey", "FALSE"="darkgrey"), labels=c("TRUE"="VDJ region", "FALSE"="non-VDJ region"))+
-#   ylab("Only external RSS motif (prop.)")+
-#   ylim(c(0,1))+
-#   xlab("SV class")+
-#   theme_light()+
-#   ggtitle("Observed")+
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-# #ggsave("fimoRAG_20190712_allSV_extRSSonly_barplot_ggplotJul2019.pdf", width=7,height=5)
-# g2=
-#   ggplot(subset(gd_rag_intext_cont, raghit_cont==TRUE), aes(x = svclass2, y=m.raghit_ext_cont, group=VDJlocusTF, fill=VDJlocusTF) )+
-#   geom_bar(stat = "identity", position=position_dodge(), col="black", size=0.2)+
-#   geom_text(aes(y=0.03, label = n) ,  position=position_dodge(width=1), size=2) + 
-#   scale_fill_manual(name="",values=c("TRUE"="lightgrey", "FALSE"="darkgrey"), labels=c("TRUE"="VDJ region", "FALSE"="non-VDJ region"))+
-#   ylab("Only external RSS motif (prop.)")+
-#   ylim(c(0,1))+
-#   xlab("SV class")+
-#   theme_light()+
-#   ggtitle("Control")+
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-# gArrange = grid.arrange(g1, g2, nrow = 1)
-# ggsave(gArrange, file="fimoRAG_obs_control_20190721_allSV_extRSSonly_barplot_ggplotJul2019.pdf", width=9,height=3.5)
-# #ggsave(gArrange, file="fimoRAG_obs_control_p10e05_20190721_allSV_extRSSonly_barplot_ggplotJul2019.pdf", width=9,height=3.5)
-# 
-# 
-# ## proportion of RAG deletions with RSS motif both internal and external
-# g1=
-#   ggplot(subset(gd_rag_intext, raghit==TRUE), aes(x = svclass2, y=m.raghit_intext, group=VDJlocusTF, fill=VDJlocusTF) )+
-#   geom_bar(stat = "identity", position=position_dodge(), col="black", size=0.2)+
-#   geom_text(aes(y=0.03, label = n) ,  position=position_dodge(width=1), size=2) + 
-#   scale_fill_manual(name="",values=c("TRUE"="lightgrey", "FALSE"="darkgrey"), labels=c("TRUE"="VDJ region", "FALSE"="non-VDJ region"))+
-#   ylab("Both int. and ext. RSS motif (prop.)")+
-#   ylim(c(0,1))+
-#   xlab("SV class")+
-#   theme_light()+
-#   ggtitle("Observed")+
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-# #ggsave("fimoRAG_20190712_allSV_intextRSS_barplot_ggplotJul2019.pdf", width=7,height=5)
-# g2=
-#   ggplot(subset(gd_rag_intext_cont, raghit_cont==TRUE), aes(x = svclass2, y=m.raghit_intext_cont, group=VDJlocusTF, fill=VDJlocusTF) )+
-#   geom_bar(stat = "identity", position=position_dodge(), col="black", size=0.2)+
-#   geom_text(aes(y=0.03, label = n) ,  position=position_dodge(width=1), size=2) + 
-#   scale_fill_manual(name="",values=c("TRUE"="lightgrey", "FALSE"="darkgrey"), labels=c("TRUE"="VDJ region", "FALSE"="non-VDJ region"))+
-#   ylab("Both int. and ext. RSS motif (prop.)")+
-#   ylim(c(0,1))+
-#   xlab("SV class")+
-#   theme_light()+
-#   ggtitle("Control")+
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-# gArrange = grid.arrange(g1, g2, nrow = 1)
-# ggsave(gArrange, file="fimoRAG_obs_control_20190721_allSV_intextRSS_barplot_ggplotJul2019.pdf", width=9,height=3.5)
-# #ggsave(gArrange, file="fimoRAG_obs_control_p10e05_20190721_allSV_intextRSS_barplot_ggplotJul2019.pdf", width=9,height=3.5)
-# 
-# 
-# 
-# ### Non-template insertions (control not relevant here- is prop of non-temp ins for the SV)
-# nt <- myfiltered %>% 
-#   group_by(svclass2, VDJlocusTF, raghit) %>% 
-#   summarise(m.non.template.T = mean(non.template.T),
-#             sd.non.template.T = sd(non.template.T),
-#             n = n())
-# nt$raghit[nt$raghit==FALSE] = "no RSS"
-# nt$raghit[nt$raghit==TRUE] = "RSS motif"
-# nt$raghit = factor(nt$raghit, levels=c("RSS motif","no RSS") )
-# 
-# nt_cont <- myfiltered %>% 
-#   group_by(svclass2, VDJlocusTF, raghit_cont) %>% 
-#   summarise(m.non.template.T_cont = mean(non.template.T),
-#             sd.non.template.T_cont = sd(non.template.T),
-#             n = n())
-# nt_cont$raghit_cont[nt_cont$raghit_cont==FALSE] = "no RSS"
-# nt_cont$raghit_cont[nt_cont$raghit_cont==TRUE] = "RSS motif"
-# nt_cont$raghit_cont = factor(nt_cont$raghit_cont, levels=c("RSS motif","no RSS") )
-# 
-# # Proportion of SVs with RSS motif
-# ggplot(nt, aes(x = raghit, y=m.non.template.T, group=VDJlocusTF, fill=VDJlocusTF) )+
-#   geom_bar(stat = "identity", position=position_dodge(), col="black", size=0.2)+
-#   geom_text(aes(y=0.03, label = n) ,  position=position_dodge(width=1), size=2) + 
-#   scale_fill_manual(name="",values=c("TRUE"="lightgrey", "FALSE"="darkgrey"), labels=c("TRUE"="VDJ region", "FALSE"="non-VDJ region"))+
-#   facet_wrap(~svclass2)+
-#   ylab("Non-template insertion (prop.)")+
-#   #geom_errorbar(aes(ymin=m.raghit-sd.raghit, ymax=m.raghit+sd.raghit), width=.2, position=position_dodge(1)) +
-#   ylim(c(0,1))+
-#   theme_light()+
-#   #ggtitle("Observed")+
-#   xlab("")
-# ggsave(file="fimoRAG_obs_20190721_nontemplateI_barplot_ggplotJul2019.pdf", width=6,height=6)
-# # interestingly, very high rate of non-template insertions in VDJ deletion w/o RSS motif
-# # wonder if I'm missing some RSS motifs there, and they really are RAG. ~5% false neg rate? 
-# 
-# nt2 = nt
-# nt2$VDJlocus = "VDJ"
-# nt2$VDJlocus[nt2$VDJlocusTF==FALSE] = "non-VDJ"
-# ggplot(nt2, aes(x = VDJlocus, y=m.non.template.T, group=raghit, fill=raghit) )+
-#   geom_bar(stat = "identity", position=position_dodge(), col="black", size=0.2)+
-#   geom_text(aes(y=0.03, label = n) ,  position=position_dodge(width=1), size=2) + 
-#   scale_fill_manual(name="",values=c("no RSS"="lightgrey", "RSS motif"="darkgrey"), labels=c("no RSS"="No motif", "RSS motif"="RSS motif"))+
-#   facet_wrap(~svclass2)+
-#   ylab("Non-template insertion (prop.)")+
-#   #geom_errorbar(aes(ymin=m.raghit-sd.raghit, ymax=m.raghit+sd.raghit), width=.2, position=position_dodge(1)) +
-#   ylim(c(0,1))+
-#   theme_light()+
-#   #ggtitle("Observed")+
-#   xlab("")
-# ggsave(file="fimoRAG_obs_20190721_nontemplateI_barplot_ggplotJul2019.pdf", width=6,height=6)
-# 
-# 
-# 
-
-
-
 # ###### What are the off-target RAG deletions
 # Read in meta data to get cell type
-#m3 = read.csv(file="/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/ARGhsc_ARGlymph_all380/meandp_cellnumber_colony_all380.csv",header=T, stringsAsFactors = F)
-#myfiltered_m3 = merge(myfiltered, m3, by="colony")
-
 offtarget = subset(myfiltered, raghit ==T & VDJlocus==FALSE)
 # one deletion per colony (none with 2+)
 # 10 T cells and one B cell (could be due to # colonies + depth)
 # write.table(myfiltered_m3, file="e04_filtered20190206_myfiltered_RAG_nonRAG_SVs_ARG.txt", col.names = T, row.names = F, quote=F)
 # write.table(myfiltered_m3[myfiltered_m3$VDJlocus==FALSE & myfiltered_m3$raghit==TRUE,] , file="e04_filtered20190206_nonVDJdeletions_RAG_SVs_ARG.txt", col.names = T, row.names = F, quote=F, sep="\t")
 
-
 offtargetS = offtarget[order(offtarget$chr1, offtarget$start1), ]
-plot()
-
 manhattan.plot(offtargetS$chr1, offtargetS$start1, rep(1,times=nrow(offtarget)) , chromsizes)
 ggsave("filtered20190206_offtargetRAGdeletions.pdf", width=7,height=4)
 
-offtargetS2 = data.frame(offtargetS[,c(1:6,11)])
 
 ####### CODE TO RUN
-chromsizes = read.table("/Users/hm8/sanger/genomes/human/GRCh37d5/hg19.chrom_sizes.txt")
+chromsizes = read.table("../data/hg19.chrom_sizes.txt")
 manhattan.plot = function(chr, pos, height, chromsizes){
   if (length(chr) != length(pos) | length(pos) != length(height)) {
     warning("vectors not of same length")
@@ -968,44 +777,6 @@ manhattan.plot = function(chr, pos, height, chromsizes){
           axis.text.y=element_blank(),
           axis.ticks.y=element_blank())
 }
-
-
-
-# ############################## Plotting the RAG motif:
-# #source("http://bioconductor.org/biocLite.R")
-# #biocLite("seqLogo")
-# library(seqLogo)
-# # heptamer
-# A = scan()
-# C = scan()
-# G = scan()
-# T = scan()
-# motif1 <- data.frame(A, C, G, T)
-# pdf("RSSheptamer_logo.pdf", width=5,height=2.5)
-# seqLogo( t(motif1))
-# dev.off()
-# 
-# # nonamer
-# A = scan()
-# C = scan()
-# G = scan()
-# T = scan()
-# motif2 <- data.frame(A, C, G, T)
-# pdf("RSSnonamer_logo.pdf", width=5.2,height=2.5)
-# seqLogo( t(motif2))
-# dev.off()
-# 
-# # both
-# A = scan()
-# C = scan()
-# G = scan()
-# T = scan()
-# motif3 <- data.frame(A, C, G, T)
-# pdf("RSSheptamer_nonamer_logo.pdf", width=8,height=2.5)
-# seqLogo( t(motif3))
-# dev.off()
-
-
 
 
 

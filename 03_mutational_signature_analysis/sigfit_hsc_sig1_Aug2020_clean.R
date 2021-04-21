@@ -1,12 +1,14 @@
-# ---
-#   title: "run_hdp_lustre_pcawg_lymph_hsc"
-# ---
-# Feb 2019
+############################################################################################
+## File: sigfit_hsc_sig1_Aug2020_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: SBSblood signature extraction using sigfit
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
 
-#setwd('/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_pcawg_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg_June2020')
 
 library(sigfit)
-#data("cosmic_signatures_v2")
 data("cosmic_signatures_v3")
 
 location="farm"
@@ -24,14 +26,12 @@ if (location=="farm"){
 
 
 
-###### load in ARG380 data
-#setwd("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg")
-groupname="pcawg_mm_lymph_hsc"
+###### load in data
 
 ## We know that the colony_info file and the mutcounts_matrix samples are in the same order.
 # Otherwise, must correctly order
-mutcounts_matrix = read.table(file="/lustre/scratch116/casm/cgp/users/hm8/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/mutcounts_matrix_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg.txt", header=TRUE, stringsAsFactors=FALSE, sep="\t")
-colonyinfo_all = read.table(file="/lustre/scratch116/casm/cgp/users/hm8/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/colonyinfo_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg.txt", header=TRUE, stringsAsFactors=FALSE, sep="\t")
+mutcounts_matrix = read.table(file="../data/mutcounts_matrix_AX001_KX001_KX002_KX003_TX001_TX002_CB001.txt", header=TRUE, stringsAsFactors=FALSE, sep="\t")
+colonyinfo_all = read.table(file="../data/colonyinfo_AX001_KX001_KX002_KX003_TX001_TX002_CB001.txt", header=TRUE, stringsAsFactors=FALSE, sep="\t")
 
 ############# Make samp_type object
 Nsamp = ncol(mutcounts_matrix)
@@ -46,20 +46,13 @@ colnames(samp_typeA) = c("samp_names","celltype","group","Nmut")
 
 
 ####### Select HSCs (exclude the stemcell ones that have too few mutations to be helpful)
-myinds = which(colonyinfo_all$Cell.type2 == "HSC" & colonyinfo_all$Donor %in% c("ARG","KX001","KX002","KX003") )  # 73 HSCs
+myinds = which(colonyinfo_all$Cell.type2 == "HSC" & colonyinfo_all$Donor %in% c("AX001","KX001","KX002","KX003") )  # 73 HSCs
 mutcounts_matrix_both = mutcounts_matrix[,myinds]
 samp_type = samp_typeA[myinds, ]
 samp_names = samp_type$samp_names
 
 
-####### testing
-#mutcounts_matrix_both = mutcounts_matrix_both[,1:10]
-#samp_type = samp_type[1:10,]
-#samp_names = samp_names[1:10]
-
-
 ##### adding blood signature to cosmic signatures
-#bloodsig = read.table("/lustre/scratch116/casm/cgp/users/hm8/lymphocyteWGS/sigprofiler_analysis/bloodsig_SBS96D.txt", stringsAsFactors = F, header=T)
 cosmic_signatures_v3_blood = cosmic_signatures_v3[1,]
 
 mcmc_samples_fit_1_extra <- fit_extract_signatures(t(mutcounts_matrix_both),

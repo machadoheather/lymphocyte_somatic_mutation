@@ -1,4 +1,12 @@
-## Aug 2020 
+############################################################################################
+## File: signature_prob_per_trinuc_attribution_per1MB_pcawg_IgDenovo_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: Per-bp signature attribution (malignancy)
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
+
 
 
 ## For sigfit results, for 1Mb bins

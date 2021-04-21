@@ -1,6 +1,13 @@
-### Identifying RAG mediated deletions
+############################################################################################
+## File: analyze_AGCTmotif_July2020_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: CSR motif analysis
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
 
-### July, 2019
+
 library(tidyverse)
 library(stringr)
 library(magrittr)
@@ -10,43 +17,18 @@ library(dplyr)
 library(cowplot)
 library(reshape2)
 
-setwd("/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/AGCTmotifs")
-
 
 ## Reading in filtered data
-myfiltered = read.table("../brassfiltered_all_July2019.txt", header=T, stringsAsFactors = F, sep="\t")
-# 1142 SVs (including some un-curated ones)
-# mydeletions = myfiltered[myfiltered$svclass=="deletion",]
-# 895 deletions
-
-
-## Creating a control set of sites
-# Add a random offset of between 200-2000bp 
-# Going upstream for breakpoint 1 and downstream for breakpoint2 so can still do internal/external RSS motif analysis
-mycontrol = myfiltered
-offset1 = sample(c(-30000:-20000), size=nrow(mycontrol), replace = T)
-offset2 = sample(c(20000:30000), size=nrow(mycontrol), replace = T)
-mycontrol$start1 = myfiltered$start1 + offset1
-mycontrol$end1 = myfiltered$end1 + offset1
-mycontrol$start2 = myfiltered$start2 + offset2
-mycontrol$end2 = myfiltered$end2 + offset2
-myfiltered = mycontrol
-
-
-## Identify SVs found in multiple colonies (exact breakpoints)
-# This is important for MEME analysis (for FIMO, include all)
+myfiltered = read.table("../data/brassfiltered_all_July2019.txt", header=T, stringsAsFactors = F, sep="\t")
 myfiltered$ID = paste(myfiltered$chr1, myfiltered$start1, myfiltered$chr2, myfiltered$start2, myfiltered$svclass, sep="_")
-myfiltered_nodup = myfiltered[!(duplicated(myfiltered$ID)), ]
-#myfiltered = myfiltered_nodup
-
 
 ## Fetching the flanking sequences
 mygranges1 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr1", start.field="start1", end.field="end1", strand.field="strand1", keep.extra.columns=TRUE)
 mygranges2 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr2", start.field="start2", end.field="end2", strand.field="strand2", keep.extra.columns=TRUE)
 
 # _c. Get breakpoint flanking sequence ------------------------------------
-# __i. Get 50bp offsets ---------------------------------------------------
-# Make Grange around each breakpoint with flank 50bp
+# __i. Get 1000bp offsets ---------------------------------------------------
+# Make Grange around each breakpoint with flank 1000bp
 brkpt.1.ext.gr <- promoters(mygranges1, upstream = 1000, downstream = 0)
 brkpt.2.ext.gr <- promoters(mygranges2, upstream = 0, downstream = 1000)
 brkpt.1.int.gr <- promoters(mygranges1, upstream = 0, downstream = 1000)
@@ -89,16 +71,6 @@ tcrgend = 38407656 #7
 tcrdst = 22907537 #14   ## inside the TRA coordinates, so will just be labelled "TRA"
 tcrdend = 22938606 #14
 
-# class switching genes
-# 14      106053274       106054731       IGHA2
-# 14      106066403       106068064       IGHE
-# 14      106090813       106092402       IGHG4
-# 14      106109540       106111126       IGHG2
-# 14      106173505       106175001       IGHA1
-# 14      106207810       106209407       IGHG1
-# 14      106232251       106237742       IGHG3
-# 14      106304737       106312010       IGHD
-# 14      106318298       106322322       IGHM
 cs_start = 106053274
 cs_end = 106322322
 
@@ -117,69 +89,135 @@ for (i in 1:nrow(myfiltered)){
                 {VDJlocus[i] = FALSE}
 }
 myfiltered$VDJlocus = VDJlocus
-
-#write.table(myfiltered, file="motifnames_brassfiltered_all_1000bp_July2020.txt", quote=FALSE, col.names = T, row.names = F, sep="\t")
-#write.table(myfiltered, file="motifnames_brassfiltered_all_controls_1000bp_July2020.txt", quote=FALSE, col.names = T, row.names = F, sep="\t")
-
+write.table(myfiltered, file="motifnames_brassfiltered_all_controls_1000bp_July2020.txt", quote=FALSE, col.names = T, row.names = F, sep="\t")
 
 ## Write out fasta for MEME of FIMO
 # only write unique lines
 meme.fasta <- c(rbind(c(names(brkpt.1.ext.gr.seq), names(brkpt.2.ext.gr.seq),names(brkpt.1.int.gr.seq), names(brkpt.2.int.gr.seq) ), c(unlist(brkpt.1.ext.gr.seq), unlist(brkpt.2.ext.gr.seq), unlist(brkpt.1.int.gr.seq), unlist(brkpt.2.int.gr.seq) )))
-#writeLines(meme.fasta,  "MEME_filtered_updown_split_1000bp_July2020.fasta")
-#writeLines(meme.fasta,  "MEME_filtered_updown_split_1000bp_controls_July2020.fasta")
+writeLines(meme.fasta,  "MEME_filtered_updown_split_1000bp_July2020.fasta")
 
 
-## MEME running intructions from Dan:
-# # Submit o MEME with max motif set to 15 same as Elli paper
-# # Download HTML, txt and XML results
-# # /Users/dl8/Documents/002_ALL_Project/002_Analysis/000_MEME/000_MEME_5.0.11532383863623-1327004615
-# # I haven't built a full parser for the results files so I download all significant motif FASTAs results files    
-# # e. MEME results ---------------------------------------------------------
-# # _a. Count matches for top motif  ----------------------------------------
-# # Read in FASTA of motif 1 matches
-# MEME_motif01 <- readLines("000_MEME/000_MEME_5.0.11532383863623-1327004615/motif_1_fasta.txt")
-# 
-# # Match uniq ID back to input file and add header which includes match poistion and whether it is reverse complement
-# 
-# brass.del.assem.df$motif1.bp1 <-
-#   unlist(lapply(brass.del.assem.df$bp1_uniID, function(x) {
-#     ifelse(length(grep(x, MEME_motif01, value = T)) == 0, NA, grep(x, MEME_motif01, value = T) )
-#   }))
-# 
-# brass.del.assem.df$motif1.bp2 <-
-#   unlist(lapply(brass.del.assem.df$bp2_uniID, function(x) {
-#     ifelse(length(grep(x, MEME_motif01, value = T)) == 0, NA, grep(x, MEME_motif01, value = T))
-#   }))
 
 
-## FIMO options (website)
-# OLD:  fimo --oc . --verbosity 1 --thresh 1.0E-4 RAG-motif_hepnon_combined.meme.txt 20190128_RAGfullmotif_MEME_filtered_updown_split.fasta
-# fimo --oc . --verbosity 1 --thresh 1.0E-4 RAG-motif_hepnon_combined.meme.txt 20190712_RAGfullmotif_MEME_filtered_updown_split.fasta
 
-## MEME options (website)
-# Options:
-# - Zero or one occurence per sequence
-# - 15 motifs
-# - Classic mode
-# - width: 6-50
-# - sites per motif: 2-600 (don't know what this means)
-# file: 20190712_RAGfullmotif_MEME_filtered_updown_split.fasta
+
+## Creating a control set of sites
+# Add a random offset of between 20000-30000bp 
+# Going upstream for breakpoint 1 and downstream for breakpoint2 so can still do internal/external RSS motif analysis
+## Reading in filtered data
+myfiltered = read.table("../data/brassfiltered_all_July2019.txt", header=T, stringsAsFactors = F, sep="\t")
+mycontrol = myfiltered
+offset1 = sample(c(-30000:-20000), size=nrow(mycontrol), replace = T)
+offset2 = sample(c(20000:30000), size=nrow(mycontrol), replace = T)
+mycontrol$start1 = myfiltered$start1 + offset1
+mycontrol$end1 = myfiltered$end1 + offset1
+mycontrol$start2 = myfiltered$start2 + offset2
+mycontrol$end2 = myfiltered$end2 + offset2
+myfiltered = mycontrol
+myfiltered$ID = paste(myfiltered$chr1, myfiltered$start1, myfiltered$chr2, myfiltered$start2, myfiltered$svclass, sep="_")
+
+## Fetching the flanking sequences
+mygranges1 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr1", start.field="start1", end.field="end1", strand.field="strand1", keep.extra.columns=TRUE)
+mygranges2 = makeGRangesFromDataFrame(myfiltered, seqnames.field="chr2", start.field="start2", end.field="end2", strand.field="strand2", keep.extra.columns=TRUE)
+
+# _c. Get breakpoint flanking sequence ------------------------------------
+# __i. Get 1000bp offsets ---------------------------------------------------
+# Make Grange around each breakpoint with flank 1000bp
+brkpt.1.ext.gr <- promoters(mygranges1, upstream = 1000, downstream = 0)
+brkpt.2.ext.gr <- promoters(mygranges2, upstream = 0, downstream = 1000)
+brkpt.1.int.gr <- promoters(mygranges1, upstream = 0, downstream = 1000)
+brkpt.2.int.gr <- promoters(mygranges2, upstream = 1000, downstream = 0)
+
+# __ii. Get Sequence ------------------------------------------------------
+# Make list of sequences and fasta style name
+brkpt.1.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.ext.gr, as.character = T))
+names(brkpt.1.ext.gr.seq) <- paste0(">bp1_ext_", myfiltered$id.name, "_", myfiltered$sample)
+
+brkpt.2.ext.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.ext.gr, as.character = T))
+names(brkpt.2.ext.gr.seq) <- paste0(">bp2_ext_", myfiltered$id.name, "_", myfiltered$sample)
+
+brkpt.1.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.1.int.gr, as.character = T))
+names(brkpt.1.int.gr.seq) <- paste0(">bp1_int_", myfiltered$id.name, "_", myfiltered$sample)
+
+brkpt.2.int.gr.seq <- as.list(getSeq(hs37d5, brkpt.2.int.gr, as.character = T))
+names(brkpt.2.int.gr.seq) <- paste0(">bp2_int_", myfiltered$id.name, "_", myfiltered$sample)
+
+# Add fasta name to original file bp1 & bp2
+myfiltered$bp1_ext_uniID <- names(brkpt.1.ext.gr.seq)
+myfiltered$bp2_ext_uniID <- names(brkpt.2.ext.gr.seq)
+myfiltered$bp1_int_uniID <- names(brkpt.1.int.gr.seq)
+myfiltered$bp2_int_uniID <- names(brkpt.2.int.gr.seq)
+
+## Annotate VDJ regions in original SV file
+ighst = 106304735 # 14
+ighend = 107283226 # 14
+iglst = 22385390 # 22
+iglend = 23263607 # 22
+tcrhst = 22090055 # 14 TRA
+tcrhend = 23014042 # 14
+tcrlst = 142000819 # 7  TRB
+tcrlend = 142510972 # 7
+
+igkst = 89160078 # 2
+igkend = 90274237 # 2
+tcrgst = 38292979 #7
+tcrgend = 38407656 #7
+tcrdst = 22907537 #14   ## inside the TRA coordinates, so will just be labelled "TRA"
+tcrdend = 22938606 #14
+
+cs_start = 106053274
+cs_end = 106322322
+
+VDJlocus = vector()
+for (i in 1:nrow(myfiltered)){
+  X = myfiltered[i,]
+  length(X)
+  if ( (X$chr1 == 14 & X$start1 > ighst-1000 & X$start1 < ighend+1000) | (X$chr2 == 14 & X$end2 > ighst-1000 & X$end2 < ighend+1000 ) ) {VDJlocus[i] = "igh"} else
+    if ( (X$chr1 == 22 & X$start1 > iglst-1000 & X$start1 < iglend+1000) |  (X$chr2 == 22 & X$end2 > iglst-1000 & X$end2 < iglend+1000) ) {VDJlocus[i] = "igl"} else
+      if ( (X$chr1 == 14 & X$start1 > tcrhst-1000 & X$start1 < tcrhend+1000) | (X$chr2 == 14 & X$end2 > tcrhst-1000 & X$end2 < tcrhend+1000) )  {VDJlocus[i] = "tra"} else
+        if ( (X$chr1 == 7 & X$start1 > tcrlst-1000 & X$start1 < tcrlend+1000) | (X$chr2 == 7 & X$end2 > tcrlst-1000 & X$end2 < tcrlend+1000) ){VDJlocus[i] = "trb"} else 
+          if  ( (X$chr1 == 2 & X$start1 > igkst-1000 & X$start1 < igkend+1000) | (X$chr2 == 2 & X$end2 > igkst-1000 & X$end2 < igkend+1000) ) {VDJlocus[i] = "igk"} else 
+            if ( (X$chr1 == 7 & X$start1 > tcrgst-1000 & X$start1 < tcrgend+1000) | (X$chr2 == 7 & X$end2 > tcrgst-1000 & X$end2 < tcrgend+1000) ) {VDJlocus[i] = "trg"} else 
+              if ( (X$chr1 == 14 & X$start1 > tcrdst-1000 & X$start1 < tcrdend+1000) | (X$chr2 == 14 & X$end2 > tcrdst-1000 & X$end2 < tcrdend+1000) ) {VDJlocus[i] = "trd"} else 
+                if ( (X$chr1 == 14 & X$start1 > cs_start-1000 & X$start1 < cs_end+1000) | (X$chr2 == 14 & X$end2 > cs_start-1000 & X$end2 < cs_end+1000) ) {VDJlocus[i] = "classS"} else 
+                {VDJlocus[i] = FALSE}
+}
+myfiltered$VDJlocus = VDJlocus
+write.table(myfiltered, file="motifnames_brassfiltered_all_controls_1000bp_July2020.txt", quote=FALSE, col.names = T, row.names = F, sep="\t")
+
+# Write out fasta for MEME of FIMO
+# only write unique lines
+meme.fasta <- c(rbind(c(names(brkpt.1.ext.gr.seq), names(brkpt.2.ext.gr.seq),names(brkpt.1.int.gr.seq), names(brkpt.2.int.gr.seq) ), c(unlist(brkpt.1.ext.gr.seq), unlist(brkpt.2.ext.gr.seq), unlist(brkpt.1.int.gr.seq), unlist(brkpt.2.int.gr.seq) )))
+writeLines(meme.fasta,  "MEME_filtered_updown_split_1000bp_controls_July2020.fasta")
+
+
+
+
+
+###########################################################################################################################
+############################# Run MCAST to detect AGCT repeats
+# motif p-value threshold 0.01
+# output threshold <= 100
+# spacing max 50bp
+
+# type in 2 motifs:
+# AGCT
+# TGCA
+###########################################################################################################################
+
 
 
 
 #########################################
-#####   Check for RAG using FIMO
+#####   Check for switch motifs using MCAST
 # Using the motifs file: RAG-motif_hepnon_combined.meme.txt
 myfiltered = read.table(file="motifnames_brassfiltered_all_1000bp_July2020.txt", header = T, stringsAsFactors = F, sep="\t")
-#fimoALL = read.table("mcast_obs.tsv", header=TRUE, stringsAsFactors = F, sep="\t")
-## new pvalue consistent with pcwag analysis
-fimoALL = read.table("/Users/hm8/volumes/hm8_network/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/AGCTmotifs/lymph/mcast.tsv", header=TRUE, stringsAsFactors = F, sep="\t")
+fimoALL = read.table("lymph/mcast.tsv", header=TRUE, stringsAsFactors = F, sep="\t")
 #pvalue = 1e-5
 pvalue = 1
 fimo = fimoALL[fimoALL$p.value<pvalue,]
 fimo_names = unlist(lapply(fimo$sequence_name, FUN=function(X) paste(">", X, sep="")))
-myfilteredcont = read.table(file="motifnames_brassfiltered_all_controls_1000bp_July2020.txt", header = T, stringsAsFactors = F, sep="\t")
-fimoALLcont = read.table("/Users/hm8/volumes/hm8_network/lymphocyteWGS/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/AGCTmotifs/lymph_controls/mcast.tsv", header=TRUE, stringsAsFactors = F, sep="\t")
+myfilteredcont = read.table(file="lymph_controls/mcast.tsv", header=TRUE, stringsAsFactors = F, sep="\t")
 fimocont = fimoALLcont[fimoALLcont$p.value<pvalue,]
 fimo_names_cont = unlist(lapply(fimocont$sequence_name, FUN=function(X) paste(">", X, sep="")))
 
@@ -251,8 +289,6 @@ myfiltered$raghit_extonly_cont =  !myfiltered$raghit_int_cont & myfiltered$raghi
 myfiltered = myfiltered[!(duplicated(myfiltered$ID)),]  # remove 16 lines that are duplicated
 
 ## Writing results table
-#write.table(myfiltered, file="results_mcastWGCW_p01e1000space100_brassfiltered_all_1000bp_July2020.txt", quote=F, col.names = T, row.names = F, sep="\t")
-#write.table(myfiltered, file="results_mcastWGCW_p01e100space50_brassfiltered_all_1000bp_July2020.txt", quote=F, col.names = T, row.names = F, sep="\t")
 #write.table(myfiltered, file="results_mcastWGCW_p1_brassfiltered_all_1000bp_July2020.txt", quote=F, col.names = T, row.names = F, sep="\t")
 
 
@@ -260,8 +296,8 @@ myfiltered = myfiltered[!(duplicated(myfiltered$ID)),]  # remove 16 lines that a
 ##### RE-START HERE
 #########################################
 #### RAG for VDJ and non-VDJ, by SV class
-myfiltered = read.table(file="results_mcastWGCW_p1_brassfiltered_all_1000bp_July2020.txt", header = T, sep="\t") # 1126
-brassfilteredTPnodupNonASCAT = read.table(file="/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brassfilteredTPnodupNonASCAT_July2020.txt", header=T, sep="\t", stringsAsFactors = F)
+myfiltered = read.table(file="../data/results_mcastWGCW_p1_brassfiltered_all_1000bp_July2020.txt", header = T, sep="\t") # 1126
+brassfilteredTPnodupNonASCAT = read.table(file="../data/brassfilteredTPnodupNonASCAT_July2020.txt", header=T, sep="\t", stringsAsFactors = F)
 myfiltered$IDsample = paste(myfiltered$chr1, myfiltered$start1, myfiltered$start2, myfiltered$sample, sep="_")
 agctfinal = myfiltered[myfiltered$IDsample %in% brassfilteredTPnodupNonASCAT$IDsample, ]  #  986 116 (not sure 
 
@@ -430,7 +466,7 @@ ggsave("control_obs_VDJ_barplot_AGCT_p1_July2020.pdf", width=5,height=4)
 
 
 #### Plotting with RAG results
-myRAG = read.table(file="/Users/hm8/sanger/lymphocyteExpansionSequenceAnalysis/metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/brass_metaAnalysis_ARGhscPBonly_KX001_KX002_KX003_tonsilMS_tonsilPS_stemcellCB2_ARGtreg/RAGmotifs/results_p10e4_obs_control_fimo_RAGheptamer_fullmotif_20200710_brassfiltered_nodup_analyzed_info_July2020.txt", header=T, stringsAsFactors = F, sep="\t")
+myRAG = read.table(file="../data/results_p10e4_obs_control_fimo_RAGheptamer_fullmotif_20200710_brassfiltered_nodup_analyzed_info_July2020.txt", header=T, stringsAsFactors = F, sep="\t")
 
 
 myATGC = myfiltered_type[,c("ID","raghit")]

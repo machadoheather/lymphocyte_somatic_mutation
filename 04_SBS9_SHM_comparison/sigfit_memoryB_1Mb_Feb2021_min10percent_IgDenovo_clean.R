@@ -1,10 +1,14 @@
-# ---
-#   title: "run_hdp_lustre_pcawg_lymph_hsc"
-# ---
-# Feb 2019
+############################################################################################
+## File: sigfit_memoryB_1Mb_Feb2021_min10percent_IgDenovo_clean.R
+## Project: lymphocyte_somatic_mutation
+## Description: sigfit per-Mb signature attribution (normal memory B cells)
+##
+## Date: April 2021
+## Author: Heather Machado
+############################################################################################
+
 
 library(sigfit)
-#data("cosmic_signatures_v2")
 data("cosmic_signatures_v3")
 
 location="farm"
@@ -23,7 +27,7 @@ if (location=="farm"){
 args = commandArgs(trailingOnly = TRUE)
 chrom = args[1]
 
-###### load in ARG380 data
+###### load in data
 groupname="memoryB_1Mb_IgDenovo"
 
 ## We know that the colony_info file and the mutcounts_matrix samples are in the same order.
@@ -69,7 +73,7 @@ rownames(cosmic_signatures_v3_blood)[68] = "Signature.blood"
 ##### selecting the signatures that are the union of hdp and sigprofiler results
 hdp_sigprofiler = read.table(file="../data/signatures_union_hdp_sigprofiler_min10percent_memB.txt", header=F, stringsAsFactors = F)
 selectsigsA = cosmic_signatures_v3_blood[rownames(cosmic_signatures_v3_blood) %in% hdp_sigprofiler[,1],]
-Signature.Ig = read.table("../../mutsig_byregion_hdp_denovo/comp_trinuc_SIg.txt")
+Signature.Ig = read.table("../data/mutsig_byregion_hdp_denovo/comp_trinuc_SIg.txt")
 selectsigs = rbind(selectsigsA, Signature.Ig=Signature.Ig[,1])
 #[1] "SBS1"            "SBS8"            "SBS9"            "SBS17b"
 #[5] "SBS18"           "Signature.blood" "Signature.Ig"

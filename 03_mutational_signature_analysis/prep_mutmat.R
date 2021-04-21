@@ -1,4 +1,12 @@
-## Aug 2020
+############################################################################################
+## File: prep_mutmat.R
+## Project: lymphocyte_somatic_mutation
+## Description: Writing files for code_sigprofiler_pcwag_mm_lymph_hsc_clean.sh
+##
+## Date: April 2019
+## Author: Heather Machado
+############################################################################################
+
 
 
 ### preparing a matrix of mutation counts for sigprofilier signature extraction
